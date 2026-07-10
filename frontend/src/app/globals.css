@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: hsl(255, 80%, 60%);
+  --color-primary-hover: hsl(255, 80%, 65%);
+  --color-surface: hsl(225, 15%, 10%);
+  --color-surface-light: hsl(225, 15%, 15%);
+  --color-border: hsl(225, 15%, 18%);
+  --color-text-muted: hsl(225, 10%, 60%);
+
+  --font-sans: "Inter", "sans-serif";
+}
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-white font-sans antialiased;
+    background: radial-gradient(circle at 50% -20%, #1e1b4b, #020617 80%);
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-surface/80 backdrop-blur-md border border-border rounded-2xl shadow-xl;
+  }
+}
