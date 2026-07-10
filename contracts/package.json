@@ -1,0 +1,32 @@
+{
+  "name": "@multichain-dex/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BSC FeeRouter (PancakeSwap fork wrapper) + Ethereum EthFeeRouter (Uniswap fee wrapper) contracts, Hardhat toolchain.",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:fork": "hardhat test test/fork/FeeRouter.fork.test.ts",
+    "gas-report": "REPORT_GAS=true hardhat test",
+    "check:rpc": "hardhat run scripts/check-rpc.ts",
+    "audit:slither": "slither . --hardhat-ignore-compile --filter-paths mocks/",
+    "clean": "hardhat clean",
+    "deploy:bsc-testnet": "hardhat run scripts/deploy-bsc-testnet.ts --network bscTestnet",
+    "deploy:sepolia": "hardhat run scripts/deploy-sepolia.ts --network sepolia",
+    "verify:bsc-testnet": "hardhat run scripts/verify-bsc-testnet.ts --network bscTestnet",
+    "verify:sepolia": "hardhat run scripts/verify-sepolia.ts --network sepolia",
+    "smoke:bsc-testnet": "hardhat run scripts/smoke-test-bsc-testnet.ts --network bscTestnet",
+    "smoke:sepolia": "hardhat run scripts/smoke-test-sepolia.ts --network sepolia"
+  },
+  "devDependencies": {
+    "hardhat": "^2.22.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "typescript": "^5.4.0",
+    "ts-node": "^10.9.2",
+    "dotenv": "^16.4.5",
+    "@types/node": "^20.14.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2"
+  }
+}

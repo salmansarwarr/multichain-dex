@@ -1,0 +1,27 @@
+{
+  "name": "@multichain-dex/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BSC FeeRouter (PancakeSwap fork wrapper) + Ethereum EthFeeRouter (Uniswap fee wrapper) contracts, Hardhat toolchain.",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:fork:bsc": "hardhat test test/fork/FeeRouter.fork.test.ts",
+    "test:fork:eth": "hardhat test test/fork/EthFeeRouter.fork.test.ts",
+    "gas-report": "REPORT_GAS=true hardhat test",
+    "check:rpc": "hardhat run scripts/check-rpc.ts",
+    "audit:slither": "slither . --hardhat-ignore-compile --filter-paths mocks/",
+    "clean": "hardhat clean"
+  },
+  "devDependencies": {
+    "hardhat": "^2.22.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "typescript": "^5.4.0",
+    "ts-node": "^10.9.2",
+    "dotenv": "^16.4.5",
+    "@types/node": "^20.14.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2"
+  }
+}

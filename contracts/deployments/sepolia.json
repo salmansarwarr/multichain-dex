@@ -1,0 +1,14 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "contract": "EthFeeRouter",
+  "address": "0x0f3eA3301da9DD6d287130bDb8454302808CbcC2",
+  "deployTxHash": "0x97eeb5db7b12e37a2fd2672d5a6b75b699f5b06b0515bce045e300bc8ff6722e",
+  "deployedAt": "2026-07-08T19:41:51.808Z",
+  "constructorArgs": {
+    "uniswapRouter": "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008",
+    "feeWallet": "0x348DC510bEDCccB42AF5b720Fe474366379e052B",
+    "feeBps": 15,
+    "initialOwner": "0x348DC510bEDCccB42AF5b720Fe474366379e052B"
+  }
+}
