@@ -8,7 +8,7 @@ export function ChainSwitcher() {
   const tabs = [
     { id: 'bsc', label: 'BSC' },
     { id: 'ethereum', label: 'Ethereum' },
-    { id: 'solana', label: 'Solana' },
+    { id: 'arbitrum', label: 'Arbitrum' },
   ] as const;
 
   return (
@@ -32,3 +32,4 @@ export function ChainSwitcher() {
     </div>
   );
 }
+

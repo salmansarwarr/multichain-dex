@@ -11,6 +11,8 @@ const BSC_MAINNET_RPC_URL =
     process.env.BSC_MAINNET_RPC_URL || "https://bsc-dataseed.binance.org";
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL || "";
 const ETH_MAINNET_RPC_URL = process.env.ETH_MAINNET_RPC_URL || "";
+const ARBITRUM_SEPOLIA_RPC_URL = process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc";
+const ARBITRUM_MAINNET_RPC_URL = process.env.ARBITRUM_MAINNET_RPC_URL || "https://arb1.arbitrum.io/rpc";
 
 // Deployer key is only required when actually deploying/broadcasting.
 // Left empty locally so `hardhat compile` and RPC checks never require a real key.
@@ -55,9 +57,31 @@ const config: HardhatUserConfig = {
             chainId: 1,
             accounts,
         },
+        arbitrumSepolia: {
+            url: ARBITRUM_SEPOLIA_RPC_URL,
+            chainId: 421614,
+            accounts,
+        },
+        arbitrumOne: {
+            url: ARBITRUM_MAINNET_RPC_URL,
+            chainId: 42161,
+            accounts,
+        },
     },
     etherscan: {
-        apiKey: ETHERSCAN_API_KEY,
+        apiKey: 
+           ETHERSCAN_API_KEY,
+
+        customChains: [
+            {
+                network: "arbitrumSepolia",
+                chainId: 421614,
+                urls: {
+                    apiURL: "https://api-sepolia.arbiscan.io/api",
+                    browserURL: "https://sepolia.arbiscan.io",
+                },
+            },
+        ],
     },
     gasReporter: {
         // Enable with: REPORT_GAS=true npx hardhat test

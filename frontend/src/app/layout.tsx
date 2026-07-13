@@ -6,8 +6,9 @@ import { AppProviders } from "@/providers/AppProviders";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "MultiChain DEX",
-  description: "Cross-chain swaps across BSC, Ethereum, and Solana",
+  title: "AlphaterraSwapX",
+  description:
+    "Connect the best DeFi and Web3 tokens in the crypto world within the Alphaterracoin Ecosystem.",
 };
 
 export default function RootLayout({

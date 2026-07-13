@@ -1,5 +1,4 @@
 import { SwapState } from '@/hooks/useSwap';
-import { useChainContext } from '@/context/ChainContext';
 
 interface SwapButtonProps {
   isConnected: boolean;
@@ -28,8 +27,6 @@ export function SwapButton({
   onSwap,
   disabled
 }: SwapButtonProps) {
-  const { activeTab } = useChainContext();
-
   if (!isConnected) {
     return (
       <button
@@ -41,7 +38,7 @@ export function SwapButton({
     );
   }
 
-  if (activeTab !== 'solana' && isWrongNetwork && onSwitchNetwork) {
+  if (isWrongNetwork && onSwitchNetwork) {
     return (
       <button
         onClick={onSwitchNetwork}

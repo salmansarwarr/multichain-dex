@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useAccount, useBalance, useSwitchChain } from "wagmi";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { formatUnits, parseUnits } from "viem";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 
@@ -10,6 +9,7 @@ import { useChainContext } from "@/context/ChainContext";
 import {
     BSC_TESTNET_TOKENS,
     SEPOLIA_TOKENS,
+    ARBITRUM_SEPOLIA_TOKENS,
     Token,
     NATIVE_TOKEN_ADDRESS,
 } from "@/data/tokens";
@@ -19,11 +19,8 @@ import { TokenAmountInput } from "../swap/TokenAmountInput";
 import { SwapDetails } from "../swap/SwapDetails";
 import { SwapButton } from "../swap/SwapButton";
 import { useEvmQuote } from "@/hooks/useEvmQuote";
-import { useSolanaQuote } from "@/hooks/useSolanaQuote";
 import { useTokenAllowance } from "@/hooks/useTokenAllowance";
 import { useSwap } from "@/hooks/useSwap";
-import { useSolanaSwap } from "@/hooks/useSolanaSwap";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 
 export function SwapCard() {
     const { activeTab } = useChainContext();
@@ -31,78 +28,37 @@ export function SwapCard() {
     // Wallet context
     const {
         address: evmAddress,
-        isConnected: isEvmConnected,
+        isConnected,
         chain,
     } = useAccount();
     const { switchChain } = useSwitchChain();
     const { openConnectModal } = useConnectModal();
-    const { connected: isSolanaConnected } = useWallet();
-    const { setVisible: setSolanaModalVisible } = useWalletModal();
 
-    const isSolana = activeTab === "solana";
-    const isEvm = !isSolana;
-
-    // Determine expected chain ID for EVM
+    // Determine expected chain ID for the active tab. Arbitrum targets
+    // mainnet here — the testnet deployment is a dev-only mock DEX with no
+    // real liquidity, so it isn't something end users should be routed to.
     const expectedChainId =
         activeTab === "bsc"
             ? contracts.bscTestnet.chainId
-            : contracts.sepolia.chainId;
-    const isWrongNetwork =
-        isEvm && isEvmConnected && chain?.id !== expectedChainId;
+            : activeTab === "ethereum"
+            ? contracts.sepolia.chainId
+            : contracts.arbitrumOne.chainId;
+
+    const isWrongNetwork = isConnected && chain?.id !== expectedChainId;
+
+    // Arbitrum isn't live for end users on testnet (no real DEX liquidity
+    // there — see docs/deployments.md). If the connected wallet happens to
+    // be on Arbitrum Sepolia, show a "coming to mainnet" notice instead of
+    // treating it like any other wrong-network state.
+    const isArbitrumTestnetConnected =
+        activeTab === "arbitrum" && chain?.id === contracts.arbitrumSepolia.chainId;
 
     // Token Lists
-    const [solanaTokens, setSolanaTokens] = useState<Token[]>([]);
-
     const tokens = useMemo(() => {
         if (activeTab === "bsc") return BSC_TESTNET_TOKENS;
         if (activeTab === "ethereum") return SEPOLIA_TOKENS;
-        return solanaTokens;
-    }, [activeTab, solanaTokens]);
-
-    // For Solana, load a default strict list on mount
-    useEffect(() => {
-        if (activeTab === "solana" && solanaTokens.length === 0) {
-            fetch("https://lite-api.jup.ag/tokens/v1/tagged/verified")
-                .then((res) => {
-                    if (!res.ok)
-                        throw new Error(
-                            `Jupiter tokens fetch failed: ${res.status}`,
-                        );
-                    return res.json();
-                })
-                .then((data) => {
-                    setSolanaTokens(
-                        data.slice(0, 50).map((t: any) => ({
-                            address: t.address,
-                            symbol: t.symbol,
-                            name: t.name,
-                            decimals: t.decimals,
-                            logoURI: t.logoURI,
-                        })),
-                    );
-                })
-                .catch((err) => {
-                    console.warn("Could not load Solana tokens:", err);
-                    setSolanaTokens([
-                        {
-                            address:
-                                "So11111111111111111111111111111111111111112",
-                            symbol: "SOL",
-                            name: "Solana",
-                            decimals: 9,
-                            isNative: true,
-                        },
-                        {
-                            address:
-                                "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-                            symbol: "USDC",
-                            name: "USD Coin",
-                            decimals: 6,
-                        },
-                    ]);
-                });
-        }
-    }, [activeTab, solanaTokens.length]);
+        return ARBITRUM_SEPOLIA_TOKENS;
+    }, [activeTab]);
 
     // Form State
     const [tokenIn, setTokenIn] = useState<Token | null>(null);
@@ -114,7 +70,7 @@ export function SwapCard() {
     useEffect(() => {
         if (tokens.length >= 3) {
             setTokenIn(tokens[0]); // Native (e.g. tBNB, ETH)
-            setTokenOut(tokens[2]); // ERC20 (e.g. BUSD, UNI)
+            setTokenOut(tokens[2]); // ERC20 (e.g. BUSD, UNI, USDC)
             setAmountIn("");
         } else if (tokens.length >= 2) {
             setTokenIn(tokens[0]);
@@ -131,69 +87,48 @@ export function SwapCard() {
                 ? (tokenIn.address as `0x${string}`)
                 : undefined,
         chainId: expectedChainId,
-        query: { enabled: isEvm && isEvmConnected && !isWrongNetwork },
+        query: { enabled: isConnected && !isWrongNetwork },
     });
 
-    const displayBalance = isEvm && evmBalance ? evmBalance.formatted : "0";
+    const displayBalance = evmBalance ? evmBalance.formatted : "0";
     const amountInRaw =
         amountIn && tokenIn
             ? parseUnits(amountIn, tokenIn.decimals)
             : undefined;
 
     const hasInsufficientBalance = useMemo(() => {
-        if (!amountInRaw || !tokenIn || isSolana) return false;
+        if (!amountInRaw || !tokenIn) return false;
         if (!evmBalance) return true;
         return amountInRaw > evmBalance.value;
-    }, [amountInRaw, evmBalance, tokenIn, isSolana]);
+    }, [amountInRaw, evmBalance, tokenIn]);
 
     // Quotes
     const { quote: evmQuoteOut, loading: evmQuoteLoading } = useEvmQuote(
-        isEvm ? expectedChainId : undefined,
+        expectedChainId,
         tokenIn?.address,
         tokenOut?.address,
         amountInRaw,
     );
 
-    const {
-        quote: solQuote,
-        quoteAmountOut: solQuoteOut,
-        loading: solQuoteLoading,
-    } = useSolanaQuote(
-        isSolana ? tokenIn?.address : undefined,
-        isSolana ? tokenOut?.address : undefined,
-        amountInRaw,
-    );
-
-    const loadingQuote = isEvm ? evmQuoteLoading : solQuoteLoading;
-    const quoteOutRaw = isEvm ? evmQuoteOut : solQuoteOut;
     const amountOutDisplay =
-        quoteOutRaw && tokenOut
-            ? formatUnits(quoteOutRaw, tokenOut.decimals)
+        evmQuoteOut && tokenOut
+            ? formatUnits(evmQuoteOut, tokenOut.decimals)
             : "";
 
-    // Approvals (EVM only)
-    const feeRouterAddress = isEvm
-        ? getFeeRouterAddress(expectedChainId)
-        : undefined;
+    // Approvals (EVM)
+    const feeRouterAddress = getFeeRouterAddress(expectedChainId);
     const { needsApproval, approve, approving } = useTokenAllowance(
-        isEvm ? tokenIn?.address : undefined,
+        tokenIn?.address,
         feeRouterAddress,
         amountInRaw,
     );
 
     // Swapping
     const {
-        state: evmSwapState,
-        execute: executeEvmSwap,
-        reset: resetEvmSwap,
+        state: swapState,
+        execute: executeSwap,
+        reset: resetSwap,
     } = useSwap();
-    const {
-        state: solSwapState,
-        execute: executeSolSwap,
-        reset: resetSolSwap,
-    } = useSolanaSwap();
-
-    const swapState = isEvm ? evmSwapState : solSwapState;
 
     // Derived calculations for Swap Details
     const feeRaw = amountInRaw ? (amountInRaw * 15n) / 10000n : null;
@@ -201,8 +136,8 @@ export function SwapCard() {
         feeRaw && tokenIn ? formatUnits(feeRaw, tokenIn.decimals) : null;
 
     const slippageBps = parseFloat(slippage || "0.5") * 100;
-    const minReceivedRaw = quoteOutRaw
-        ? (quoteOutRaw * BigInt(10000 - Math.floor(slippageBps))) / 10000n
+    const minReceivedRaw = evmQuoteOut
+        ? (evmQuoteOut * BigInt(10000 - Math.floor(slippageBps))) / 10000n
         : null;
     const minReceivedDisplay =
         minReceivedRaw && tokenOut
@@ -210,14 +145,11 @@ export function SwapCard() {
             : null;
 
     // Actions
-    const handleConnect = () => {
-        if (isEvm) openConnectModal?.();
-        else setSolanaModalVisible(true);
-    };
+    const handleConnect = () => openConnectModal?.();
 
     const handleSwap = async () => {
-        if (isEvm && tokenIn && tokenOut && amountInRaw && minReceivedRaw) {
-            await executeEvmSwap(
+        if (tokenIn && tokenOut && amountInRaw && minReceivedRaw) {
+            await executeSwap(
                 expectedChainId,
                 tokenIn.address,
                 tokenOut.address,
@@ -225,8 +157,6 @@ export function SwapCard() {
                 minReceivedRaw,
                 evmAddress!,
             );
-        } else if (isSolana && solQuote) {
-            await executeSolSwap(solQuote);
         }
     };
 
@@ -234,19 +164,17 @@ export function SwapCard() {
         setTokenIn(tokenOut);
         setTokenOut(tokenIn);
         setAmountIn("");
-        if (isEvm) resetEvmSwap();
-        else resetSolSwap();
+        resetSwap();
     };
 
-    const isConnected = isEvm ? isEvmConnected : isSolanaConnected;
     const disableSwap =
         !amountInRaw ||
         amountInRaw === 0n ||
-        !quoteOutRaw ||
+        !evmQuoteOut ||
         hasInsufficientBalance;
 
     return (
-        <div className="w-full max-w-[480px] mx-auto mt-20 glass-card p-6 flex flex-col min-h-[400px]">
+        <div className="w-full max-w-[480px] mx-auto mt-8 glass-card p-6 flex flex-col min-h-[400px]">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold">Swap</h2>
                 <div className="text-sm font-medium text-text-muted bg-surface-light px-3 py-1 rounded-lg border border-border">
@@ -254,6 +182,26 @@ export function SwapCard() {
                 </div>
             </div>
 
+            {isArbitrumTestnetConnected ? (
+                <div className="flex flex-col items-center text-center gap-3 py-12">
+                    <p className="text-base font-semibold">
+                        Arbitrum will be available on mainnet
+                    </p>
+                    <p className="text-sm text-text-muted max-w-xs">
+                        You&apos;re connected to Arbitrum Sepolia (testnet). Arbitrum
+                        swaps open up once we launch on Arbitrum One mainnet.
+                    </p>
+                    <button
+                        onClick={() =>
+                            switchChain?.({ chainId: contracts.arbitrumOne.chainId })
+                        }
+                        className="mt-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-all"
+                    >
+                        Switch to Arbitrum Mainnet
+                    </button>
+                </div>
+            ) : (
+            <>
             <div className="relative">
                 <TokenAmountInput
                     label="You pay"
@@ -261,7 +209,7 @@ export function SwapCard() {
                     onAmountChange={(val) => {
                         setAmountIn(val);
                         if (swapState === "SUCCESS" || swapState === "ERROR")
-                            isEvm ? resetEvmSwap() : resetSolSwap();
+                            resetSwap();
                     }}
                     token={tokenIn}
                     onTokenSelect={setTokenIn}
@@ -299,12 +247,12 @@ export function SwapCard() {
                         onTokenSelect={setTokenOut}
                         tokens={tokens}
                         disabled={true}
-                        loading={loadingQuote}
+                        loading={evmQuoteLoading}
                     />
                 </div>
             </div>
 
-            {amountInRaw && quoteOutRaw && (
+            {amountInRaw && evmQuoteOut && (
                 <SwapDetails
                     feeAmount={feeDisplay}
                     feeSymbol={tokenIn?.symbol || null}
@@ -330,7 +278,7 @@ export function SwapCard() {
             <SwapButton
                 isConnected={isConnected}
                 isWrongNetwork={isWrongNetwork}
-                needsApproval={isEvm && needsApproval}
+                needsApproval={needsApproval}
                 hasInsufficientBalance={hasInsufficientBalance}
                 swapState={swapState}
                 approving={approving}
@@ -342,6 +290,8 @@ export function SwapCard() {
                 onSwap={handleSwap}
                 disabled={disableSwap}
             />
+            </>
+            )}
         </div>
     );
 }

@@ -1,0 +1,20 @@
+{
+  "network": "arbitrumSepolia",
+  "chainId": 421614,
+  "contract": "EthFeeRouter",
+  "address": "0xE3D1C0c29795616Ea70Bf87F258B03181169f388",
+  "deployTxHash": "0xbc8164cf70a90fbff43d5a0dc2bb6ce508282dc1630efa68151d60509e83c0f8",
+  "deployedAt": "2026-07-13T18:11:17.351Z",
+  "constructorArgs": {
+    "uniswapRouter": "0x542e6c05156D8946730029589E5B785Cb40Cf1Ba",
+    "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+    "feeBps": 15,
+    "initialOwner": "0x348DC510bEDCccB42AF5b720Fe474366379e052B"
+  },
+  "mocks": {
+    "note": "No official Uniswap-V2-compatible DEX confirmed live on Arbitrum Sepolia (verified via eth_getCode). These test fixtures stand in for it.",
+    "mockRouter": "0x542e6c05156D8946730029589E5B785Cb40Cf1Ba",
+    "tWETH": "0xBd018b76A06C51f000EB3DB6a1861384643D5E16",
+    "tUSDC": "0x82f89bBD87c75F915736E5d346dD48f40d66c8e0"
+  }
+}

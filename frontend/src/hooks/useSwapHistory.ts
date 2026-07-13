@@ -18,9 +18,56 @@ export interface SwapHistoryEvent {
 // between e.g. BSC and Ethereum mainnet) — consider making this per-chainId.
 const LOOKBACK_BLOCKS = 5_000n;
 
-// Free-tier RPC providers (publicnode, Alchemy free, etc.) commonly cap
-// eth_getLogs to a 10-block range. Adjust up if your RPC allows more.
-const CHUNK_SIZE = 10n;
+// Alchemy allows much larger eth_getLogs ranges than 10 blocks (up to several
+// thousand depending on tier/network). 10 was causing 500 sequential requests
+// for a single 5,000-block lookback, which blew through CU/s and got
+// throttled. Bump this way up — tune down only if you get a "range too large"
+// error from your specific RPC provider.
+const CHUNK_SIZE = 2_000n;
+
+// Retry/backoff for CU/s throttling (Alchemy returns a JSON-RPC error, not an
+// HTTP 429, when you exceed compute units per second).
+const MAX_RETRIES = 5;
+const BASE_DELAY_MS = 500;
+
+function isRateLimitError(err: unknown): boolean {
+    const message = err instanceof Error ? err.message : String(err ?? "");
+    return (
+        message.includes("compute units per second") ||
+        message.includes("capacity") ||
+        message.toLowerCase().includes("rate limit") ||
+        message.includes("429")
+    );
+}
+
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getLogsWithRetry(
+    publicClient: PublicClient,
+    params: Record<string, unknown>,
+): Promise<Awaited<ReturnType<PublicClient["getLogs"]>>> {
+    let attempt = 0;
+
+    for (;;) {
+        try {
+            // eslint-disable-next-line no-await-in-loop -- retry must stay sequential
+            return await publicClient.getLogs(params as any);
+        } catch (err) {
+            attempt += 1;
+            if (attempt > MAX_RETRIES || !isRateLimitError(err)) {
+                throw err;
+            }
+            // Exponential backoff with jitter so retries don't sync up and
+            // re-trigger the same CU/s ceiling.
+            const delay =
+                BASE_DELAY_MS * 2 ** (attempt - 1) + Math.random() * 250;
+            // eslint-disable-next-line no-await-in-loop -- intentional backoff pause
+            await sleep(delay);
+        }
+    }
+}
 
 async function getLogsChunked(
     publicClient: PublicClient,
@@ -40,13 +87,20 @@ async function getLogsChunked(
             start + chunkSize - 1n > toBlock ? toBlock : start + chunkSize - 1n;
 
         // eslint-disable-next-line no-await-in-loop -- must stay sequential to respect rate limits
-        const logs = await publicClient.getLogs({
+        const logs = await getLogsWithRetry(publicClient, {
             ...baseParams,
             fromBlock: start,
             toBlock: end,
-        } as any);
+        });
 
         allLogs.push(...logs);
+
+        // Small pacing gap between chunks even on success — keeps us under
+        // CU/s ceilings proactively instead of only reacting after a throttle.
+        if (start + chunkSize <= toBlock) {
+            // eslint-disable-next-line no-await-in-loop -- intentional pacing pause
+            await sleep(50);
+        }
     }
 
     return allLogs;

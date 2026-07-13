@@ -13,10 +13,16 @@
     "clean": "hardhat clean",
     "deploy:bsc-testnet": "hardhat run scripts/deploy-bsc-testnet.ts --network bscTestnet",
     "deploy:sepolia": "hardhat run scripts/deploy-sepolia.ts --network sepolia",
+    "deploy:arbitrum-sepolia": "hardhat run scripts/deploy-arbitrum-sepolia.ts --network arbitrumSepolia",
     "verify:bsc-testnet": "hardhat run scripts/verify-bsc-testnet.ts --network bscTestnet",
     "verify:sepolia": "hardhat run scripts/verify-sepolia.ts --network sepolia",
+    "verify:arbitrum-sepolia": "hardhat run scripts/verify-arbitrum-sepolia.ts --network arbitrumSepolia",
     "smoke:bsc-testnet": "hardhat run scripts/smoke-test-bsc-testnet.ts --network bscTestnet",
-    "smoke:sepolia": "hardhat run scripts/smoke-test-sepolia.ts --network sepolia"
+    "smoke:sepolia": "hardhat run scripts/smoke-test-sepolia.ts --network sepolia",
+    "smoke:arbitrum-sepolia": "hardhat run scripts/smoke-test-arbitrum-sepolia.ts --network arbitrumSepolia",
+    "set-fee-wallet:bsc-testnet": "hardhat run scripts/set-fee-wallet.ts --network bscTestnet",
+    "set-fee-wallet:sepolia": "hardhat run scripts/set-fee-wallet.ts --network sepolia",
+    "set-fee-wallet:arbitrum-sepolia": "hardhat run scripts/set-fee-wallet.ts --network arbitrumSepolia"
   },
   "devDependencies": {
     "hardhat": "^2.22.0",

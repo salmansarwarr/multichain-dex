@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export type ChainTab = 'bsc' | 'ethereum' | 'solana';
+export type ChainTab = 'bsc' | 'ethereum' | 'arbitrum';
 
 interface ChainContextType {
   activeTab: ChainTab;
@@ -18,7 +18,7 @@ export function ChainProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setMounted(true);
     const saved = sessionStorage.getItem('activeChainTab') as ChainTab;
-    if (saved && ['bsc', 'ethereum', 'solana'].includes(saved)) {
+    if (saved && ['bsc', 'ethereum', 'arbitrum'].includes(saved)) {
       setActiveTabState(saved);
     }
   }, []);
@@ -51,3 +51,4 @@ export function useChainContext() {
   }
   return context;
 }
+

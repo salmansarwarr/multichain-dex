@@ -52,3 +52,26 @@ export const SEPOLIA_TOKENS: Token[] = [
     decimals: 18,
   }
 ];
+
+export const ARBITRUM_SEPOLIA_TOKENS: Token[] = [
+  {
+    address: NATIVE_TOKEN_ADDRESS,
+    symbol: 'ETH',
+    name: 'Ethereum',
+    decimals: 18,
+    isNative: true,
+  },
+  {
+    address: '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73',
+    symbol: 'WETH',
+    name: 'Wrapped Ether',
+    decimals: 18,
+  },
+  {
+    address: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+    symbol: 'USDC',
+    name: 'USD Coin',
+    decimals: 6,
+  }
+];
+

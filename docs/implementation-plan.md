@@ -1,5 +1,5 @@
 # Multi-Chain DEX Swap Platform — Implementation Plan
-(BSC PancakeSwap fork + Ethereum Uniswap + Solana Jupiter, custom 0.15% fee, branded UI, Hostinger subdomain deployment)
+(BSC PancakeSwap fork + Ethereum Uniswap + Arbitrum One SushiSwap V2, custom 0.15% fee, branded UI, Hostinger subdomain deployment)
 
 This plan is broken into phases. Each phase has: **Goal → Claude Code Tasks → Deliverables → Test/Validation Gate**. Do not move to the next phase until the gate passes. Feed one phase at a time to Claude Code as its own session/task so context stays clean.
 
@@ -12,21 +12,20 @@ This plan is broken into phases. Each phase has: **Goal → Claude Code Tasks �
 **Key architecture decision (important):**
 - **BSC**: You can fork PancakeSwap's Router contract (Solidity) and add a fee-skim wrapper — full on-chain custom fee control.
 - **Ethereum**: Same pattern, wrapping Uniswap V2/V3 Router — but ETH gas is expensive, so most teams route through 0x/1inch and take fee via `feeRecipient` param instead of deploying a full router fork.
-- **Solana**: There is no "PancakeSwap fork" equivalent — Solana swaps go through **Jupiter Aggregator API**, which has a *native* platform-fee parameter (`platformFeeBps`). You do NOT fork a Solana AMM; you integrate Jupiter's API/SDK and pass your fee wallet.
+- **Arbitrum**: Arbitrum is an EVM L2 — the same Solidity `EthFeeRouter.sol` deploys unchanged. Arbitrum uses SushiSwap V2 (Uniswap V2-compatible ABI) as the default DEX for this integration. No separate integration layer needed — just deploy and point to the SushiSwap router address on Arbitrum One.
 
-So realistically: BSC = smart contract fork + fee wrapper. Ethereum = fee wrapper around Uniswap router (or 0x API fee param). Solana = Jupiter API integration with platform fee param, no contract deployment needed. Flag this to your client explicitly — it avoids overpromising "3 identical forked DEXs."
+So realistically: BSC = smart contract fork + fee wrapper. Ethereum = fee wrapper around Uniswap router. Arbitrum = same EthFeeRouter.sol deployed on Arbitrum One against SushiSwap V2 router — full on-chain fee control, EVM-native. Flag this to your client explicitly — it avoids overpromising.
 
 **Claude Code Tasks:**
-1. Init monorepo: `/contracts` (Hardhat, BSC+ETH), `/solana` (Jupiter integration scripts), `/frontend` (Next.js), `/docs`.
-2. Set up `.env.example` for RPC URLs (BSC mainnet/testnet, Ethereum mainnet/Sepolia, Solana mainnet/devnet), fee wallet addresses, WalletConnect project ID.
-3. Set up Hardhat config for BSC Testnet (chapel) + Ethereum Sepolia.
-4. Set up Solana devnet config + Jupiter API sandbox key check.
+1. Init monorepo: `/contracts` (Hardhat, BSC+ETH+ARB), `/frontend` (Next.js), `/docs`.
+2. Set up `.env.example` for RPC URLs (BSC mainnet/testnet, Ethereum mainnet/Sepolia, Arbitrum mainnet/Sepolia), fee wallet addresses, WalletConnect project ID.
+3. Set up Hardhat config for BSC Testnet (chapel) + Ethereum Sepolia + Arbitrum Sepolia.
 
 **Deliverables:** Repo skeleton, working `npx hardhat compile` on empty contracts, `.env.example` committed (never commit real keys).
 
 **Validation Gate:**
 - [ ] `hardhat compile` runs clean
-- [ ] RPC connectivity test script pings BSC testnet, Sepolia, Solana devnet successfully
+- [ ] RPC connectivity test script pings BSC testnet, Sepolia, Arbitrum Sepolia successfully
 - [ ] Git repo has `.gitignore` excluding `.env`, `node_modules`, `artifacts`
 
 ---
@@ -72,39 +71,39 @@ So realistically: BSC = smart contract fork + fee wrapper. Ethereum = fee wrappe
 
 ---
 
-## Phase 3 — Solana Swap via Jupiter
+## Phase 3 — Arbitrum Fee Router Deployment
 
-**Goal:** Integrate Jupiter Aggregator with your platform fee.
+**Goal:** Deploy `EthFeeRouter.sol` on Arbitrum Sepolia, pointed at the SushiSwap V2 router on Arbitrum.
+
+**Key architecture note:** Arbitrum is EVM-compatible — `EthFeeRouter.sol` is reused without modification. The only change is the constructor argument: `routerAddress` = SushiSwap V2 router on Arbitrum One (`0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506`) or a test router on Arbitrum Sepolia.
 
 **Claude Code Tasks:**
-1. Set up Jupiter API v6 (or latest) integration in `/solana`:
-   - `getQuote()` — calls Jupiter `/quote` with `platformFeeBps=15` and your `feeAccount`.
-   - `getSwapTransaction()` — calls `/swap` to get the serialized transaction.
-   - You need an **associated token account** owned by your fee wallet for each token you'll collect fees in (Jupiter sends fees as the output token, not automatically converted).
-2. Write a devnet test script: connect a test wallet, request quote, sign, submit, confirm fee account received expected lamports/tokens.
-3. Add SOL and SPL-token swap paths.
+1. Add `arbitrumSepolia` and `arbitrumOne` network configs to `hardhat.config.ts` (already done in Phase 0).
+2. Add a parameterized deployment script `deploy/deployArb.ts` targeting the SushiSwap router address.
+3. Deploy `EthFeeRouter.sol` to Arbitrum Sepolia (chainId 421614), verify on Arbiscan.
+4. Document deployed address in `/docs/deployments.md`.
 
-**Deliverables:** Solana swap service module + devnet test script.
+**Deliverables:** Deployed + verified `EthFeeRouter.sol` on Arbitrum Sepolia. Same contract code as Ethereum — no new Solidity needed.
 
 **Validation Gate:**
-- [ ] Devnet swap succeeds end-to-end (quote → sign → confirm)
-- [ ] Fee account balance change matches expected `platformFeeBps`
-- [ ] Slippage/failed-quote handling tested (e.g., illiquid pair returns graceful error, not a crash)
+- [ ] Contract verified and readable on Arbiscan Sepolia
+- [ ] Manual testnet swap executed via script (not UI) on Arbitrum Sepolia, fee received correctly
+- [ ] Confirm gas costs vs Ethereum (should be significantly lower on Arbitrum)
 
 ---
 
 ## Phase 4 — Testnet Deployment of Contracts
 
-**Goal:** Get BSC + ETH contracts live on public testnets before any frontend work touches them.
+**Goal:** Get BSC + ETH + ARB contracts live on public testnets before any frontend work touches them.
 
 **Claude Code Tasks:**
 1. Deployment scripts (Hardhat `deploy/` or `scripts/deploy.ts`) parameterized by network.
-2. Deploy `FeeRouter` to BSC Testnet, `EthFeeRouter` to Sepolia.
-3. Verify contracts on BscScan Testnet + Etherscan Sepolia (source verification).
+2. Deploy `FeeRouter` to BSC Testnet, `EthFeeRouter` to Sepolia, `EthFeeRouter` to Arbitrum Sepolia.
+3. Verify contracts on BscScan Testnet + Etherscan Sepolia + Arbiscan Sepolia (source verification).
 4. Document deployed addresses in `/docs/deployments.md`.
 
 **Validation Gate:**
-- [ ] Both contracts verified and readable on block explorers
+- [ ] All three contracts verified and readable on block explorers
 - [ ] Manual testnet swap executed via a script (not UI yet) on each chain, fee received correctly
 - [ ] Ownership/admin functions tested from a non-owner account (must revert)
 
@@ -112,18 +111,19 @@ So realistically: BSC = smart contract fork + fee wrapper. Ethereum = fee wrappe
 
 ## Phase 5 — Frontend Foundation (Next.js, Multi-Chain Wallets)
 
-**Goal:** Wallet connection across EVM (BSC+ETH) and Solana in one app.
+**Goal:** Wallet connection across all three EVM chains (BSC, Ethereum, Arbitrum) in one app.
 
 **Claude Code Tasks:**
 1. Next.js app, Tailwind, your brand tokens (colors/fonts — define these before UI work starts, see `frontend-design` considerations).
-2. EVM wallets via **wagmi + viem** + WalletConnect v2 (covers MetaMask, Trust Wallet, WalletConnect-compatible wallets). Configure chains: BSC, BSC Testnet, Ethereum, Sepolia.
-3. Solana wallets via `@solana/wallet-adapter` (Phantom, Solflare, etc.), devnet + mainnet-beta configs.
-4. A single top-level "Network" switcher component that toggles the active chain context (this is the trickiest UX piece — decide if it's tab-based: [BSC] [Ethereum] [Solana]).
+2. EVM wallets via **wagmi + viem** + WalletConnect v2 (covers MetaMask, Trust Wallet, WalletConnect-compatible wallets). Configure chains: BSC, BSC Testnet, Ethereum, Sepolia, Arbitrum One, Arbitrum Sepolia.
+3. A single top-level "Network" switcher component toggling the active chain context (tab-based: [BSC] [Ethereum] [Arbitrum]).
 
-**Deliverables:** Working app where a user can connect MetaMask on BSC, switch to Ethereum, and separately connect Phantom for Solana.
+**Note:** All three chains are EVM-compatible — a single RainbowKit wallet connects to all of them. No secondary wallet stack needed.
+
+**Deliverables:** Working app where a user can connect MetaMask and switch between BSC, Ethereum, and Arbitrum chains.
 
 **Validation Gate:**
-- [ ] Connect/disconnect works for at least 2 EVM wallets + Phantom on Solana
+- [ ] Connect/disconnect works for at least 2 EVM wallets (MetaMask + WalletConnect)
 - [ ] Chain-switch prompts correctly when wallet is on wrong network
 - [ ] Wallet state persists across page refresh (session storage, not local fake state)
 - [ ] Mobile wallet deep-linking tested (WalletConnect QR + mobile browser)
@@ -132,19 +132,19 @@ So realistically: BSC = smart contract fork + fee wrapper. Ethereum = fee wrappe
 
 ## Phase 6 — Swap UI
 
-**Goal:** The actual swap interface, wired to your contracts (BSC/ETH) and Jupiter service (Solana).
+**Goal:** The actual swap interface, wired to your contracts (BSC/ETH/ARB).
 
 **Claude Code Tasks:**
-1. Token selector with search (token lists: PancakeSwap default list for BSC, Uniswap default list for ETH, Jupiter strict list for Solana).
+1. Token selector with search (token lists: PancakeSwap default list for BSC, Uniswap default list for ETH, SushiSwap/Arbitrum token list for ARB).
 2. Amount input with live quote fetching (debounced), price impact display, slippage tolerance setting.
-3. Swap execution flow: approve (EVM only, ERC-20 allowance) → confirm → pending → success/fail states.
-4. Transaction history panel (read from your `SwapExecuted` events / Solana tx signatures).
+3. Swap execution flow: approve (ERC-20 allowance) → confirm → pending → success/fail states.
+4. Transaction history panel (read from your `SwapExecuted` events on each chain).
 5. Fee transparency: show the 0.15% fee line-item in the swap preview (builds trust, also often legally advisable).
 
 **Validation Gate:**
 - [ ] Full swap cycle works on BSC testnet through the UI (not scripts) — connect, quote, approve, swap, confirm
 - [ ] Same for Sepolia
-- [ ] Same for Solana devnet
+- [ ] Same for Arbitrum Sepolia
 - [ ] Test insufficient-balance, rejected-signature, and slippage-exceeded error states all show clear UI messages, not raw RPC errors
 - [ ] Test with a fee-on-transfer/deflationary token (BSC has many) to confirm UI doesn't break
 
@@ -182,7 +182,7 @@ So realistically: BSC = smart contract fork + fee wrapper. Ethereum = fee wrappe
 | BSC Testnet | MetaMask | tBNB → test token | 0.15% to fee wallet |
 | BSC Testnet | Trust Wallet (mobile) | test token → tBNB | 0.15% to fee wallet |
 | Sepolia | MetaMask | test ETH → test token | 0.15% to fee wallet |
-| Solana Devnet | Phantom | SOL → test SPL token | platformFeeBps to fee ATA |
+| Arbitrum Sepolia | MetaMask | ETH → WETH | 0.15% to fee wallet |
 
 Also test: wrong-network prompts, wallet rejection mid-swap, network drop mid-swap (does it show pending correctly and reconcile on reconnect), high slippage warning, very small amounts (dust), very large amounts (whale-size, checks liquidity depth errors).
 
@@ -212,8 +212,8 @@ Also test: wrong-network prompts, wallet rejection mid-swap, network drop mid-sw
 ## Phase 10 — Mainnet Deployment & Monitoring
 
 **Claude Code Tasks:**
-1. Deploy `FeeRouter` to BSC mainnet, `EthFeeRouter` to Ethereum mainnet, switch Solana config to mainnet-beta + real Jupiter fee account.
-2. Verify contracts on explorers.
+1. Deploy `FeeRouter` to BSC mainnet, `EthFeeRouter` to Ethereum mainnet, `EthFeeRouter` to Arbitrum One (SushiSwap router: `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506`).
+2. Verify contracts on explorers (BscScan, Etherscan, Arbiscan).
 3. Set up monitoring: a simple alert (e.g., webhook to Telegram/Discord) on `SwapExecuted` events and on any `Paused` event.
 4. Point production subdomain env vars at mainnet RPCs/addresses.
 5. Do a small real-money smoke test yourself (few dollars) on each chain before announcing launch.
@@ -226,6 +226,7 @@ Also test: wrong-network prompts, wallet rejection mid-swap, network drop mid-sw
 ---
 
 ## Notes on scoping honestly with your client
-- Solana isn't a "fork" — it's a Jupiter integration. Worth clarifying in writing so expectations match delivery.
-- 0.15% fee on ETH mainnet swaps will feel expensive next to gas costs unless volume is meaningful — worth mentioning L2 support (Base, Arbitrum) as a future upsell rather than promising it now.
+- Arbitrum is EVM-native — it behaves identically to Ethereum from a code perspective, uses the same wallet (MetaMask), and the same contract pattern. Gas costs are meaningfully lower (~10–100x) which is a genuine selling point vs Ethereum mainnet.
+- All three chains share one wallet connection in the UI — a much simpler UX than the old Solana dual-wallet approach.
 - Multisig for the fee-adjustment owner key is a small extra step that meaningfully reduces your liability if the wallet is ever compromised.
+- L2 advantages (Base, Optimism) could be additional future chain slots if the client wants to expand — same code pattern applies.
