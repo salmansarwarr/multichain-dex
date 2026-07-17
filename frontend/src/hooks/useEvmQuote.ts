@@ -5,6 +5,12 @@ import { V2RouterABI } from '../abis/V2Router';
 import { EthFeeRouterABI } from '../abis/EthFeeRouter';
 import { NATIVE_TOKEN_ADDRESS } from '../data/tokens';
 import { getFeeRouterAddress, contracts } from '../config/contracts';
+import { withRpcRetry } from './rpcRetry';
+
+// Quote reads are single quick calls, not a chunked scan, so a couple of
+// retries is enough to absorb a transient CU/s throttle without piling on.
+const MAX_RETRIES = 2;
+const BASE_DELAY_MS = 300;
 
 export function useEvmQuote(
   chainId: number | undefined,
@@ -44,16 +50,24 @@ export function useEvmQuote(
           wethAddress = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd'; // WBNB
         } else {
           // Sepolia EthFeeRouter exposes uniswapRouter()
-          routerAddress = await publicClient.readContract({
-            address: feeRouterAddress,
-            abi: EthFeeRouterABI,
-            functionName: 'uniswapRouter',
-          }) as Address;
-          wethAddress = await publicClient.readContract({
-            address: routerAddress,
-            abi: V2RouterABI,
-            functionName: 'WETH',
-          }) as Address;
+          routerAddress = await withRpcRetry(
+            () => publicClient.readContract({
+              address: feeRouterAddress,
+              abi: EthFeeRouterABI,
+              functionName: 'uniswapRouter',
+            }),
+            MAX_RETRIES,
+            BASE_DELAY_MS,
+          ) as Address;
+          wethAddress = await withRpcRetry(
+            () => publicClient.readContract({
+              address: routerAddress,
+              abi: V2RouterABI,
+              functionName: 'WETH',
+            }),
+            MAX_RETRIES,
+            BASE_DELAY_MS,
+          ) as Address;
         }
 
         const path = [
@@ -76,12 +90,16 @@ export function useEvmQuote(
           throw new Error("Amount too small after fee");
         }
 
-        const amountsOut = await publicClient.readContract({
-          address: routerAddress,
-          abi: V2RouterABI,
-          functionName: 'getAmountsOut',
-          args: [amountInAfterFee, path],
-        }) as bigint[];
+        const amountsOut = await withRpcRetry(
+          () => publicClient.readContract({
+            address: routerAddress,
+            abi: V2RouterABI,
+            functionName: 'getAmountsOut',
+            args: [amountInAfterFee, path],
+          }),
+          MAX_RETRIES,
+          BASE_DELAY_MS,
+        ) as bigint[];
 
         if (active) {
           setQuote(amountsOut[amountsOut.length - 1]);

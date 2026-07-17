@@ -4,6 +4,7 @@ import { getAbiItem } from "viem";
 import { FeeRouterABI } from "../abis/FeeRouter";
 import { getFeeRouterAddress } from "../config/contracts";
 import { Address, PublicClient } from "viem";
+import { withRpcRetry, sleep } from "./rpcRetry";
 
 export interface SwapHistoryEvent {
     transactionHash: string;
@@ -16,57 +17,57 @@ export interface SwapHistoryEvent {
 
 // How far back to scan, in blocks. Tune per chain (block time varies a lot
 // between e.g. BSC and Ethereum mainnet) — consider making this per-chainId.
-const LOOKBACK_BLOCKS = 5_000n;
+// Kept low deliberately: at the 10-block/call free-tier cap below, each
+// 1,000 blocks costs 100 eth_getLogs calls. 5,000 (500 calls) was blowing
+// through the Alchemy free-tier quota and causing sustained 429s.
+const LOOKBACK_BLOCKS = 1_000n;
 
-// Alchemy allows much larger eth_getLogs ranges than 10 blocks (up to several
-// thousand depending on tier/network). 10 was causing 500 sequential requests
-// for a single 5,000-block lookback, which blew through CU/s and got
-// throttled. Bump this way up — tune down only if you get a "range too large"
-// error from your specific RPC provider.
-const CHUNK_SIZE = 2_000n;
+// Alchemy free-tier eth_getLogs range cap. This is NOT a soft default —
+// exceeding it is a hard 400 (InvalidRequestRpcError), not a throttle.
+// Confirmed cap: 10 blocks per call on BNB testnet free tier. If you upgrade
+// to PAYG, this can go up — check the RPC error message's suggested range
+// before raising it again.
+const CHUNK_SIZE = 10n;
+
+// How many chunk requests to run in parallel. Keeps 500 sequential requests
+// (5,000 / 10) from taking forever, while staying under Alchemy's CU/s
+// ceiling. Lowered from 8 -> 3: 8 concurrent connections to the same host
+// was triggering dropped connections ("Failed to fetch") on the free tier.
+// Tune down further if you still see failures.
+const CONCURRENCY = 3;
 
 // Retry/backoff for CU/s throttling (Alchemy returns a JSON-RPC error, not an
-// HTTP 429, when you exceed compute units per second).
+// HTTP 429, when you exceed compute units per second) AND for transient
+// network failures (dropped connections show up as a generic browser
+// "Failed to fetch", not a JSON-RPC error, so they need their own check).
 const MAX_RETRIES = 5;
 const BASE_DELAY_MS = 500;
-
-function isRateLimitError(err: unknown): boolean {
-    const message = err instanceof Error ? err.message : String(err ?? "");
-    return (
-        message.includes("compute units per second") ||
-        message.includes("capacity") ||
-        message.toLowerCase().includes("rate limit") ||
-        message.includes("429")
-    );
-}
-
-function sleep(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 async function getLogsWithRetry(
     publicClient: PublicClient,
     params: Record<string, unknown>,
 ): Promise<Awaited<ReturnType<PublicClient["getLogs"]>>> {
-    let attempt = 0;
+    return withRpcRetry(
+        () => publicClient.getLogs(params as any),
+        MAX_RETRIES,
+        BASE_DELAY_MS,
+    );
+}
 
-    for (;;) {
-        try {
-            // eslint-disable-next-line no-await-in-loop -- retry must stay sequential
-            return await publicClient.getLogs(params as any);
-        } catch (err) {
-            attempt += 1;
-            if (attempt > MAX_RETRIES || !isRateLimitError(err)) {
-                throw err;
-            }
-            // Exponential backoff with jitter so retries don't sync up and
-            // re-trigger the same CU/s ceiling.
-            const delay =
-                BASE_DELAY_MS * 2 ** (attempt - 1) + Math.random() * 250;
-            // eslint-disable-next-line no-await-in-loop -- intentional backoff pause
-            await sleep(delay);
-        }
+// Builds the list of [fromBlock, toBlock] windows, each no larger than
+// chunkSize, covering [fromBlock, toBlock] inclusive.
+function buildBlockRanges(
+    fromBlock: bigint,
+    toBlock: bigint,
+    chunkSize: bigint,
+): Array<{ fromBlock: bigint; toBlock: bigint }> {
+    const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = [];
+    for (let start = fromBlock; start <= toBlock; start += chunkSize) {
+        const end =
+            start + chunkSize - 1n > toBlock ? toBlock : start + chunkSize - 1n;
+        ranges.push({ fromBlock: start, toBlock: end });
     }
+    return ranges;
 }
 
 async function getLogsChunked(
@@ -79,27 +80,34 @@ async function getLogsChunked(
     fromBlock: bigint,
     toBlock: bigint,
     chunkSize: bigint = CHUNK_SIZE,
+    concurrency: number = CONCURRENCY,
 ) {
+    const ranges = buildBlockRanges(fromBlock, toBlock, chunkSize);
     const allLogs: Awaited<ReturnType<PublicClient["getLogs"]>> = [];
 
-    for (let start = fromBlock; start <= toBlock; start += chunkSize) {
-        const end =
-            start + chunkSize - 1n > toBlock ? toBlock : start + chunkSize - 1n;
+    for (let i = 0; i < ranges.length; i += concurrency) {
+        const batch = ranges.slice(i, i + concurrency);
 
-        // eslint-disable-next-line no-await-in-loop -- must stay sequential to respect rate limits
-        const logs = await getLogsWithRetry(publicClient, {
-            ...baseParams,
-            fromBlock: start,
-            toBlock: end,
-        });
+        // eslint-disable-next-line no-await-in-loop -- batches must stay sequential; requests within a batch run in parallel
+        const results = await Promise.all(
+            batch.map((range) =>
+                getLogsWithRetry(publicClient, {
+                    ...baseParams,
+                    fromBlock: range.fromBlock,
+                    toBlock: range.toBlock,
+                }),
+            ),
+        );
 
-        allLogs.push(...logs);
+        for (const logs of results) {
+            allLogs.push(...logs);
+        }
 
-        // Small pacing gap between chunks even on success — keeps us under
+        // Small pacing gap between batches even on success — keeps us under
         // CU/s ceilings proactively instead of only reacting after a throttle.
-        if (start + chunkSize <= toBlock) {
+        if (i + concurrency < ranges.length) {
             // eslint-disable-next-line no-await-in-loop -- intentional pacing pause
-            await sleep(50);
+            await sleep(100);
         }
     }
 
