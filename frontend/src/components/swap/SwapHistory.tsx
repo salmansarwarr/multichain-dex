@@ -1,10 +1,24 @@
 import { useSwapHistory } from '@/hooks/useSwapHistory';
 import { formatUnits } from 'viem';
 
+// Block-explorer hostname per chain — was previously a two-way "97 vs
+// everything else" check that mislabeled Arbitrum (and BSC/ETH mainnet)
+// transactions with a Sepolia Etherscan link.
+const EXPLORER_HOST: Record<number, string> = {
+  97: 'testnet.bscscan.com',       // BSC Testnet
+  56: 'bscscan.com',               // BSC Mainnet
+  11155111: 'sepolia.etherscan.io', // Ethereum Sepolia
+  1: 'etherscan.io',               // Ethereum Mainnet
+  421614: 'sepolia.arbiscan.io',   // Arbitrum Sepolia
+  42161: 'arbiscan.io',            // Arbitrum One
+};
+
 export function SwapHistory({ chainId }: { chainId: number | undefined }) {
   const { history, loading } = useSwapHistory(chainId);
 
   if (!chainId || loading || history.length === 0) return null;
+
+  const explorerHost = EXPLORER_HOST[chainId];
 
   return (
     <div className="w-full max-w-[480px] mx-auto mt-6 glass-card p-6">
@@ -16,14 +30,20 @@ export function SwapHistory({ chainId }: { chainId: number | undefined }) {
               <span className="font-medium">
                 Swap 
               </span>
-              <a 
-                href={`https://${chainId === 97 ? 'testnet.bscscan.com' : 'sepolia.etherscan.io'}/tx/${tx.transactionHash}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-primary hover:underline mt-1 truncate max-w-[150px]"
-              >
-                {tx.transactionHash}
-              </a>
+              {explorerHost ? (
+                <a
+                  href={`https://${explorerHost}/tx/${tx.transactionHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary hover:underline mt-1 truncate max-w-[150px]"
+                >
+                  {tx.transactionHash}
+                </a>
+              ) : (
+                <span className="text-xs text-text-muted mt-1 truncate max-w-[150px]">
+                  {tx.transactionHash}
+                </span>
+              )}
             </div>
             <div className="flex flex-col items-end">
               <span className="text-text-muted text-xs">Fee Paid</span>

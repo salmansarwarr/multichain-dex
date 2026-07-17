@@ -1,12 +1,41 @@
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { connectorsForWallets } from '@rainbow-me/rainbowkit';
+import {
+  metaMaskWallet,
+  walletConnectWallet,
+  coinbaseWallet,
+  trustWallet,
+  binanceWallet,
+  okxWallet,
+  injectedWallet,
+} from '@rainbow-me/rainbowkit/wallets';
 import { customBscTestnet, customBsc, customSepolia, customMainnet, customArbitrumSepolia, customArbitrumOne } from './chains';
-import { http } from 'wagmi';
+import { createConfig, http } from 'wagmi';
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID';
 
-export const wagmiConfig = getDefaultConfig({
-  appName: 'AlphaterraSwapX',
-  projectId,
+const connectors = connectorsForWallets(
+  [
+    {
+      groupName: 'Recommended',
+      wallets: [
+        metaMaskWallet,
+        trustWallet,
+        binanceWallet,
+        okxWallet,
+        coinbaseWallet,
+        walletConnectWallet,
+        injectedWallet,
+      ],
+    },
+  ],
+  {
+    appName: 'AlphaterraSwapX',
+    projectId,
+  },
+);
+
+export const wagmiConfig = createConfig({
+  connectors,
   chains: [customBscTestnet, customBsc, customSepolia, customMainnet, customArbitrumSepolia, customArbitrumOne],
   transports: {
     [customBscTestnet.id]: http(customBscTestnet.rpcUrls.default.http[0]),

@@ -1,14 +1,16 @@
 import { useState, useMemo } from 'react';
 import { Token } from '@/data/tokens';
+import { useCustomToken } from '@/hooks/useCustomToken';
 
 interface TokenSelectorProps {
   isOpen: boolean;
   onClose: () => void;
   tokens: Token[];
   onSelect: (token: Token) => void;
+  chainId?: number;
 }
 
-export function TokenSelector({ isOpen, onClose, tokens, onSelect }: TokenSelectorProps) {
+export function TokenSelector({ isOpen, onClose, tokens, onSelect, chainId }: TokenSelectorProps) {
   const [search, setSearch] = useState('');
 
   const filteredTokens = useMemo(() => {
@@ -21,6 +23,17 @@ export function TokenSelector({ isOpen, onClose, tokens, onSelect }: TokenSelect
         t.address.toLowerCase().includes(lowerSearch)
     );
   }, [tokens, search]);
+
+  // If the search text is a contract address not already in the list,
+  // resolve it live on-chain so users can swap any token, not just the
+  // curated defaults.
+  const isKnownAddress = filteredTokens.some(
+    (t) => t.address.toLowerCase() === search.trim().toLowerCase()
+  );
+  const { customToken, loading: customTokenLoading, error: customTokenError } = useCustomToken(
+    !isKnownAddress ? search : '',
+    chainId
+  );
 
   if (!isOpen) return null;
 
@@ -47,7 +60,33 @@ export function TokenSelector({ isOpen, onClose, tokens, onSelect }: TokenSelect
         </div>
 
         <div className="overflow-y-auto max-h-[60vh] pb-4">
-          {filteredTokens.length === 0 ? (
+          {customTokenLoading && (
+            <div className="text-center py-4 text-text-muted text-sm">Looking up token contract...</div>
+          )}
+
+          {customTokenError && (
+            <div className="text-center py-4 text-red-400 text-sm px-4">{customTokenError}</div>
+          )}
+
+          {customToken && (
+            <button
+              onClick={() => {
+                onSelect(customToken);
+                onClose();
+              }}
+              className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left border-b border-border/50"
+            >
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/80 to-purple-500/80 flex items-center justify-center text-white font-bold shrink-0">
+                {customToken.symbol[0]}
+              </div>
+              <div>
+                <div className="font-bold text-white">{customToken.symbol}</div>
+                <div className="text-xs text-text-muted">{customToken.name} · found by address</div>
+              </div>
+            </button>
+          )}
+
+          {filteredTokens.length === 0 && !customToken && !customTokenLoading && !customTokenError ? (
             <div className="text-center py-8 text-text-muted text-sm">No tokens found</div>
           ) : (
             filteredTokens.map((token) => (

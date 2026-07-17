@@ -5,6 +5,10 @@ interface SwapButtonProps {
   isWrongNetwork?: boolean;
   needsApproval: boolean;
   hasInsufficientBalance: boolean;
+  isBelowMin?: boolean;
+  isAboveMax?: boolean;
+  minAmountLabel?: string;
+  maxAmountLabel?: string;
   swapState: SwapState;
   approving: boolean;
   onConnect: () => void;
@@ -19,6 +23,10 @@ export function SwapButton({
   isWrongNetwork,
   needsApproval,
   hasInsufficientBalance,
+  isBelowMin,
+  isAboveMax,
+  minAmountLabel,
+  maxAmountLabel,
   swapState,
   approving,
   onConnect,
@@ -56,6 +64,28 @@ export function SwapButton({
         className="w-full mt-4 bg-surface-light text-text-muted font-bold py-4 rounded-xl cursor-not-allowed border border-border"
       >
         Insufficient Balance
+      </button>
+    );
+  }
+
+  if (isBelowMin) {
+    return (
+      <button
+        disabled
+        className="w-full mt-4 bg-surface-light text-text-muted font-bold py-4 rounded-xl cursor-not-allowed border border-border"
+      >
+        {minAmountLabel ? `Minimum swap is ${minAmountLabel}` : 'Below minimum swap amount'}
+      </button>
+    );
+  }
+
+  if (isAboveMax) {
+    return (
+      <button
+        disabled
+        className="w-full mt-4 bg-surface-light text-text-muted font-bold py-4 rounded-xl cursor-not-allowed border border-border"
+      >
+        {maxAmountLabel ? `Maximum swap is ${maxAmountLabel}` : 'Above maximum swap amount'}
       </button>
     );
   }

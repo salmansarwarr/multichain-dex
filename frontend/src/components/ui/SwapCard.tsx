@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useAccount, useBalance, useSwitchChain } from "wagmi";
+import { useAccount, useBalance, useSwitchChain, useReadContract } from "wagmi";
 import { formatUnits, parseUnits } from "viem";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 
@@ -14,6 +14,8 @@ import {
     NATIVE_TOKEN_ADDRESS,
 } from "@/data/tokens";
 import { contracts, getFeeRouterAddress } from "@/config/contracts";
+import { getSwapLimits } from "@/config/limits";
+import { ERC20ABI } from "@/abis/ERC20";
 
 import { TokenAmountInput } from "../swap/TokenAmountInput";
 import { SwapDetails } from "../swap/SwapDetails";
@@ -102,6 +104,12 @@ export function SwapCard() {
         return amountInRaw > evmBalance.value;
     }, [amountInRaw, evmBalance, tokenIn]);
 
+    // Min/max transaction limits (frontend guardrail — see config/limits.ts)
+    const swapLimits = getSwapLimits(tokenIn?.symbol);
+    const amountInNumber = parseFloat(amountIn || "0");
+    const isBelowMin = amountInNumber > 0 && amountInNumber < swapLimits.min;
+    const isAboveMax = amountInNumber > swapLimits.max;
+
     // Quotes
     const { quote: evmQuoteOut, loading: evmQuoteLoading } = useEvmQuote(
         expectedChainId,
@@ -156,6 +164,7 @@ export function SwapCard() {
                 amountInRaw,
                 minReceivedRaw,
                 evmAddress!,
+                tokenIn.isFeeOnTransfer || tokenOut.isFeeOnTransfer,
             );
         }
     };
@@ -171,7 +180,20 @@ export function SwapCard() {
         !amountInRaw ||
         amountInRaw === 0n ||
         !evmQuoteOut ||
-        hasInsufficientBalance;
+        hasInsufficientBalance ||
+        isBelowMin ||
+        isAboveMax;
+
+    // Featured tax-token stat (e.g. Alfat) — read live rather than
+    // hardcoded, so it can't drift from the real on-chain value.
+    const featuredToken = tokenIn?.isFeeOnTransfer ? tokenIn : tokenOut?.isFeeOnTransfer ? tokenOut : undefined;
+    const { data: featuredTokenSupply } = useReadContract({
+        address: featuredToken?.address as `0x${string}` | undefined,
+        abi: ERC20ABI,
+        functionName: "totalSupply",
+        chainId: expectedChainId,
+        query: { enabled: !!featuredToken },
+    });
 
     return (
         <div className="w-full max-w-[480px] mx-auto mt-8 glass-card p-6 flex flex-col min-h-[400px]">
@@ -180,6 +202,20 @@ export function SwapCard() {
                 <div className="text-sm font-medium text-text-muted bg-surface-light px-3 py-1 rounded-lg border border-border">
                     {activeTab.toUpperCase()}
                 </div>
+            </div>
+
+            <div className="flex items-center gap-2 -mt-3 mb-5 flex-wrap">
+                <span className="text-xs font-medium text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full">
+                    0.15% fee
+                </span>
+                <span className="text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-full">
+                    Smart-contract secured
+                </span>
+                {featuredToken && featuredTokenSupply !== undefined && (
+                    <span className="text-xs font-medium text-text-muted bg-surface-light border border-border px-2.5 py-1 rounded-full">
+                        {featuredToken.symbol} supply: {Number(formatUnits(featuredTokenSupply as bigint, featuredToken.decimals)).toLocaleString()}
+                    </span>
+                )}
             </div>
 
             {isArbitrumTestnetConnected ? (
@@ -216,6 +252,7 @@ export function SwapCard() {
                     tokens={tokens}
                     balance={displayBalance}
                     onMax={() => setAmountIn(displayBalance)}
+                    chainId={expectedChainId}
                 />
 
                 <div className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 top-1/2 z-10">
@@ -248,6 +285,7 @@ export function SwapCard() {
                         tokens={tokens}
                         disabled={true}
                         loading={evmQuoteLoading}
+                        chainId={expectedChainId}
                     />
                 </div>
             </div>
@@ -280,6 +318,10 @@ export function SwapCard() {
                 isWrongNetwork={isWrongNetwork}
                 needsApproval={needsApproval}
                 hasInsufficientBalance={hasInsufficientBalance}
+                isBelowMin={isBelowMin}
+                isAboveMax={isAboveMax}
+                minAmountLabel={tokenIn ? `${swapLimits.min} ${tokenIn.symbol}` : undefined}
+                maxAmountLabel={tokenIn ? `${swapLimits.max} ${tokenIn.symbol}` : undefined}
                 swapState={swapState}
                 approving={approving}
                 onConnect={handleConnect}

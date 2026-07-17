@@ -14,7 +14,7 @@
 @layer base {
   body {
     @apply bg-slate-950 text-white font-sans antialiased;
-    background: radial-gradient(circle at 50% -20%, #1e1b4b, #020617 80%);
+    background: radial-gradient(circle at 50% -20%, #4338ca, #0f172a 80%);
     min-height: 100vh;
   }
 }

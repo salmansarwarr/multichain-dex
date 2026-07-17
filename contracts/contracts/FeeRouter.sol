@@ -108,7 +108,10 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
     // ---------------------------------------------------------------------
 
     /// @notice Swap an exact amount of `path[0]` for `path[last]`, taking a
-    /// fee off `amountIn` before swapping the remainder.
+    /// fee off `amountIn` before swapping the remainder. Fee is computed off
+    /// the amount *actually received* (balance-delta), not the caller-supplied
+    /// `amountIn` — keeps the fee correct even if `path[0]` itself takes a
+    /// transfer cut (common on BSC's many tax/reflection tokens).
     /// @dev Caller must have approved this contract for at least `amountIn`
     /// of `path[0]` beforehand.
     function swapExactTokensForTokensWithFee(
@@ -118,23 +121,9 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
         address to,
         uint256 deadline
     ) external nonReentrant whenNotPaused returns (uint256[] memory amounts) {
-        if (amountIn == 0) revert ZeroAmount();
-        if (path.length < 2) revert EmptyPath();
-        if (block.timestamp > deadline) revert DeadlineExpired();
+        (address tokenIn, address tokenOut, uint256 received, uint256 feeAmount, uint256 amountAfterFee) =
+            _pullAndSkimFee(amountIn, path, deadline);
 
-        address tokenIn = path[0];
-        address tokenOut = path[path.length - 1];
-
-        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
-
-        (uint256 feeAmount, uint256 amountAfterFee) = _computeFee(amountIn);
-
-        if (feeAmount > 0) {
-            IERC20(tokenIn).safeTransfer(feeWallet, feeAmount);
-        }
-
-        // forceApprove handles both zero-first-then-set tokens and normal
-        // ERC20s uniformly, and resets any stale leftover allowance.
         IERC20(tokenIn).forceApprove(address(pancakeRouter), amountAfterFee);
 
         amounts = pancakeRouter.swapExactTokensForTokens(
@@ -145,7 +134,34 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
             deadline
         );
 
-        emit SwapExecuted(msg.sender, tokenIn, tokenOut, amountIn, feeAmount);
+        emit SwapExecuted(msg.sender, tokenIn, tokenOut, received, feeAmount);
+    }
+
+    /// @notice Same as above, but for output tokens that also take a
+    /// transfer cut (tax/reflection tokens — e.g. Alfat's 6% transfer tax).
+    /// PancakeSwap's SupportingFeeOnTransferTokens variant doesn't return
+    /// amounts, so slippage protection relies entirely on `amountOutMin`.
+    function swapExactTokensForTokensWithFeeSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external nonReentrant whenNotPaused {
+        (address tokenIn, address tokenOut, uint256 received, uint256 feeAmount, uint256 amountAfterFee) =
+            _pullAndSkimFee(amountIn, path, deadline);
+
+        IERC20(tokenIn).forceApprove(address(pancakeRouter), amountAfterFee);
+
+        pancakeRouter.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            amountAfterFee,
+            amountOutMin,
+            path,
+            to,
+            deadline
+        );
+
+        emit SwapExecuted(msg.sender, tokenIn, tokenOut, received, feeAmount);
     }
 
     /// @notice Swap an exact amount of native BNB (msg.value) for
@@ -181,9 +197,86 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
         emit SwapExecuted(msg.sender, address(0), tokenOut, msg.value, feeAmount);
     }
 
+    /// @notice Same as above, but for buying a tax/reflection output token
+    /// with native BNB (e.g. BNB -> Alfat, which charges a 6% transfer tax).
+    /// The plain swapExactETHForTokens can revert or misbehave against a
+    /// taxed output token — this calls PancakeSwap's own
+    /// SupportingFeeOnTransferTokens variant instead.
+    function swapExactETHForTokensWithFeeSupportingFeeOnTransferTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable nonReentrant whenNotPaused {
+        if (msg.value == 0) revert ZeroAmount();
+        if (path.length < 2) revert EmptyPath();
+        if (block.timestamp > deadline) revert DeadlineExpired();
+
+        address tokenOut = path[path.length - 1];
+
+        (uint256 feeAmount, uint256 amountAfterFee) = _computeFee(msg.value);
+
+        if (feeAmount > 0) {
+            // feeWallet is owner-gated (setFeeWallet/onlyOwner), never attacker-supplied.
+            // slither-disable-next-line arbitrary-send-eth
+            (bool sent, ) = feeWallet.call{value: feeAmount}("");
+            if (!sent) revert EthTransferFailed();
+        }
+
+        pancakeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amountAfterFee}(
+            amountOutMin,
+            path,
+            to,
+            deadline
+        );
+
+        emit SwapExecuted(msg.sender, address(0), tokenOut, msg.value, feeAmount);
+    }
+
     // ---------------------------------------------------------------------
     // Internal
     // ---------------------------------------------------------------------
+
+    /// @dev Pulls `amountIn` of `path[0]` from the caller, measuring the
+    /// actual balance delta (so a tax/deflationary `path[0]` doesn't cause us
+    /// to skim a fee off, or approve, more than we actually hold), then
+    /// skims the fee off that real received amount.
+    function _pullAndSkimFee(
+        uint256 amountIn,
+        address[] calldata path,
+        uint256 deadline
+    )
+        internal
+        returns (
+            address tokenIn,
+            address tokenOut,
+            uint256 received,
+            uint256 feeAmount,
+            uint256 amountAfterFee
+        )
+    {
+        if (amountIn == 0) revert ZeroAmount();
+        if (path.length < 2) revert EmptyPath();
+        if (block.timestamp > deadline) revert DeadlineExpired();
+
+        tokenIn = path[0];
+        tokenOut = path[path.length - 1];
+
+        uint256 balanceBefore = IERC20(tokenIn).balanceOf(address(this));
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        received = IERC20(tokenIn).balanceOf(address(this)) - balanceBefore;
+
+        // Plain zero-check on a same-tx balance delta, not equality against
+        // a manipulable expected amount — any nonzero receipt is accepted.
+        // slither-disable-next-line incorrect-equality
+        if (received == 0) revert ZeroAmount();
+
+        (feeAmount, amountAfterFee) = _computeFee(received);
+
+        if (feeAmount > 0) {
+            IERC20(tokenIn).safeTransfer(feeWallet, feeAmount);
+        }
+    }
 
     function _computeFee(uint256 amountIn) internal view returns (uint256 feeAmount, uint256 amountAfterFee) {
         feeAmount = (amountIn * feeBps) / BPS_DENOMINATOR;

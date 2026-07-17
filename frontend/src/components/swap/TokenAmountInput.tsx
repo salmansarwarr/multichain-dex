@@ -13,6 +13,7 @@ interface TokenAmountInputProps {
   loading?: boolean;
   balance?: string;
   onMax?: () => void;
+  chainId?: number;
 }
 
 export function TokenAmountInput({
@@ -26,6 +27,7 @@ export function TokenAmountInput({
   loading = false,
   balance,
   onMax,
+  chainId,
 }: TokenAmountInputProps) {
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
@@ -106,6 +108,7 @@ export function TokenAmountInput({
           onClose={() => setIsSelectorOpen(false)}
           tokens={tokens}
           onSelect={onTokenSelect}
+          chainId={chainId}
         />
       )}
     </>

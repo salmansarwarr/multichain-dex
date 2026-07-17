@@ -224,7 +224,7 @@ async function main() {
   try {
     await feeRouter.swapExactETHForTokensWithFee.staticCall(
       AMOUNT_OUT_MIN,
-      [WBNB_TESTNET, BUSD_TESTNET],
+      swapPath,
       owner.address,
       deadline(),
       { value: SWAP_AMOUNT }

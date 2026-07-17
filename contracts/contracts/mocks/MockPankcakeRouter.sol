@@ -57,6 +57,35 @@ contract MockPancakeRouter {
         emit MockSwap(to, amountIn, amountOut);
     }
 
+    /// @dev Measures actual received balance (post any transfer tax on
+    /// tokenIn) before computing the swap output, exactly like a real
+    /// PancakeSwap pool would settle on the actual amount it received.
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external {
+        require(!shouldRevert, "MockPancakeRouter: forced revert");
+        require(block.timestamp <= deadline, "MockPancakeRouter: EXPIRED");
+        require(path.length >= 2, "MockPancakeRouter: INVALID_PATH");
+
+        address tokenIn = path[0];
+        address tokenOut = path[path.length - 1];
+
+        uint256 balanceBefore = IERC20(tokenIn).balanceOf(address(this));
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        uint256 received = IERC20(tokenIn).balanceOf(address(this)) - balanceBefore;
+
+        uint256 amountOut = (received * rate) / 1e18;
+        require(amountOut >= amountOutMin, "MockPancakeRouter: INSUFFICIENT_OUTPUT_AMOUNT");
+
+        IERC20(tokenOut).safeTransfer(to, amountOut);
+
+        emit MockSwap(to, received, amountOut);
+    }
+
     function swapExactETHForTokens(
         uint256 amountOutMin,
         address[] calldata path,
@@ -78,6 +107,29 @@ contract MockPancakeRouter {
         amounts = new uint256[](path.length);
         amounts[0] = amountIn;
         amounts[path.length - 1] = amountOut;
+
+        emit MockSwap(to, amountIn, amountOut);
+    }
+
+    /// @dev Output-side equivalent of swapExactTokensForTokensSupportingFeeOnTransferTokens,
+    /// for buying a taxed token with native BNB.
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable {
+        require(!shouldRevert, "MockPancakeRouter: forced revert");
+        require(block.timestamp <= deadline, "MockPancakeRouter: EXPIRED");
+        require(path.length >= 2, "MockPancakeRouter: INVALID_PATH");
+
+        address tokenOut = path[path.length - 1];
+        uint256 amountIn = msg.value;
+
+        uint256 amountOut = (amountIn * rate) / 1e18;
+        require(amountOut >= amountOutMin, "MockPancakeRouter: INSUFFICIENT_OUTPUT_AMOUNT");
+
+        IERC20(tokenOut).safeTransfer(to, amountOut);
 
         emit MockSwap(to, amountIn, amountOut);
     }

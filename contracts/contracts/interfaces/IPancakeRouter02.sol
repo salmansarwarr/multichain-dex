@@ -29,6 +29,25 @@ interface IPancakeRouter02 {
         uint256 deadline
     ) external returns (uint256[] memory amounts);
 
+    /// @notice For tax/deflationary output tokens — doesn't return amounts
+    /// since exact output can't be known in advance for such tokens.
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+
+    /// @notice Native-BNB-in equivalent of the above, for buying a
+    /// tax/deflationary output token with BNB.
+    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external payable;
+
     function getAmountsOut(
         uint256 amountIn,
         address[] calldata path

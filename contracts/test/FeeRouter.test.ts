@@ -39,6 +39,21 @@ async function deployFixture() {
   return { owner, feeWallet, user, other, tokenIn, tokenOut, mockRouter, feeRouter };
 }
 
+async function deflationaryFixture() {
+  const base = await deployFixture();
+  const { owner, mockRouter } = base;
+
+  // 2% burned on every transfer — simulates a real deflationary/reflection
+  // token (BSC has many of these, including Alfat's 6% transfer tax).
+  const MockFeeOnTransferERC20 = await ethers.getContractFactory("MockFeeOnTransferERC20");
+  const deflToken = await MockFeeOnTransferERC20.deploy("Deflationary Token", "DEFL", 200);
+
+  await deflToken.mint(await mockRouter.getAddress(), ethers.parseUnits("1000000", 18));
+  // Router itself doesn't take the mint tax (from == address(0)), so it holds the full amount.
+
+  return { ...base, deflToken };
+}
+
 function computeFee(amountIn: bigint, feeBps: bigint = FEE_BPS): { fee: bigint; afterFee: bigint } {
   const fee = (amountIn * feeBps) / BPS_DENOMINATOR;
   return { fee, afterFee: amountIn - fee };
@@ -305,6 +320,122 @@ describe("FeeRouter", function () {
             deadline
           )
       ).to.not.be.reverted;
+    });
+  });
+
+  describe("Fee-on-transfer token handling", function () {
+    it("computes the fee off actually-received tokenIn balance, not the nominal amountIn, when tokenIn is deflationary", async function () {
+      const { feeRouter, deflToken, tokenOut, feeWallet, user } = await loadFixture(
+        deflationaryFixture
+      );
+
+      await deflToken.mint(user.address, ethers.parseUnits("1000", 18));
+      await deflToken.connect(user).approve(await feeRouter.getAddress(), ethers.MaxUint256);
+
+      const amountIn = ethers.parseUnits("100", 18);
+      // 2% transfer tax means the router only actually receives 98% of amountIn.
+      const actualReceived = (amountIn * 9800n) / 10_000n;
+      const { fee: expectedFee } = computeFee(actualReceived);
+
+      const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+      const feeWalletBalBefore = await deflToken.balanceOf(feeWallet.address);
+
+      const tx = await feeRouter
+        .connect(user)
+        .swapExactTokensForTokensWithFee(
+          amountIn,
+          0,
+          [await deflToken.getAddress(), await tokenOut.getAddress()],
+          user.address,
+          deadline
+        );
+
+      // Fee is computed off the ~98 tokens actually received, not the
+      // nominal 100 — if the contract trusted amountIn naively, the fee
+      // here would be wrong (and it could even attempt to transfer more
+      // than it holds, since the extra 2% never arrived). This is exactly
+      // the bug class that made Alfat (6% transfer tax) unsafe to list
+      // before this fix.
+      await expect(tx)
+        .to.emit(feeRouter, "SwapExecuted")
+        .withArgs(
+          user.address,
+          await deflToken.getAddress(),
+          await tokenOut.getAddress(),
+          actualReceived,
+          expectedFee
+        );
+
+      const feeWalletBalAfter = await deflToken.balanceOf(feeWallet.address);
+      // The fee wallet itself also takes the 2% tax on the transfer it receives.
+      const expectedFeeWalletDelta = (expectedFee * 9800n) / 10_000n;
+      expect(feeWalletBalAfter - feeWalletBalBefore).to.equal(expectedFeeWalletDelta);
+
+      expect(await deflToken.balanceOf(await feeRouter.getAddress())).to.equal(0);
+    });
+
+    it("uses the SupportingFeeOnTransferTokens path correctly for a deflationary output token", async function () {
+      const { feeRouter, tokenIn, mockRouter, user } = await loadFixture(deflationaryFixture);
+
+      const MockFeeOnTransferERC20 = await ethers.getContractFactory("MockFeeOnTransferERC20");
+      const deflOut = await MockFeeOnTransferERC20.deploy("Deflationary Out", "DOUT", 300); // 3% tax
+      await deflOut.mint(await mockRouter.getAddress(), ethers.parseUnits("1000000", 18));
+
+      const amountIn = ONE_TOKEN * 50n;
+      const { afterFee } = computeFee(amountIn);
+      const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+      // afterFee tokens go into the mock router at a 1:1 rate, but the
+      // 3% tax on deflOut means `user` receives less than `afterFee`.
+      const expectedUserReceipt = (afterFee * 9700n) / 10_000n;
+
+      await feeRouter
+        .connect(user)
+        .swapExactTokensForTokensWithFeeSupportingFeeOnTransferTokens(
+          amountIn,
+          0, // amountOutMin — real usage should compute this off-chain with slippage tolerance
+          [await tokenIn.getAddress(), await deflOut.getAddress()],
+          user.address,
+          deadline
+        );
+
+      expect(await deflOut.balanceOf(user.address)).to.equal(expectedUserReceipt);
+    });
+
+    it("uses the SupportingFeeOnTransferTokens path correctly when buying a deflationary token with native BNB", async function () {
+      const { feeRouter, mockRouter, feeWallet, user } = await loadFixture(deflationaryFixture);
+
+      // Simulates buying Alfat (6% transfer tax) with BNB — the exact flow
+      // that made this entry point necessary.
+      const MockFeeOnTransferERC20 = await ethers.getContractFactory("MockFeeOnTransferERC20");
+      const alfatLike = await MockFeeOnTransferERC20.deploy("Alfat-like", "ALFAT", 600); // 6% tax
+      await alfatLike.mint(await mockRouter.getAddress(), ethers.parseUnits("1000000", 18));
+
+      const swapAmount = ethers.parseEther("1");
+      const { fee: expectedFee, afterFee } = computeFee(swapAmount);
+      const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+      // afterFee BNB buys `afterFee` ALFAT-like tokens at the mock's 1:1
+      // rate, but the 6% tax on receipt means `user` gets less than that.
+      const expectedUserReceipt = (afterFee * 9400n) / 10_000n;
+
+      const feeWalletBalBefore = await ethers.provider.getBalance(feeWallet.address);
+
+      await feeRouter
+        .connect(user)
+        .swapExactETHForTokensWithFeeSupportingFeeOnTransferTokens(
+          0, // amountOutMin — real usage should compute this off-chain with slippage tolerance
+          [await feeRouter.pancakeRouter(), await alfatLike.getAddress()],
+          user.address,
+          deadline,
+          { value: swapAmount }
+        );
+
+      expect(await alfatLike.balanceOf(user.address)).to.equal(expectedUserReceipt);
+
+      const feeWalletBalAfter = await ethers.provider.getBalance(feeWallet.address);
+      expect(feeWalletBalAfter - feeWalletBalBefore).to.equal(expectedFee);
     });
   });
 });

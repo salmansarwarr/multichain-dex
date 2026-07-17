@@ -34,22 +34,44 @@ export function useSwap() {
     tokenOut: string,
     amountIn: bigint,
     amountOutMin: bigint,
-    recipient: Address
+    recipient: Address,
+    feeOnTransfer: boolean = false
   ) => {
     setState('SWAPPING');
     setError(null);
     try {
       const isNativeIn = tokenIn === NATIVE_TOKEN_ADDRESS;
       const isNativeOut = tokenOut === NATIVE_TOKEN_ADDRESS;
-      
+
       const feeRouterAddress = getFeeRouterAddress(chainId);
       if (!feeRouterAddress) throw new Error("Unsupported chain");
       if (!publicClient) throw new Error("Public client not found");
+
+      // BSC's FeeRouter and the Ethereum/Arbitrum EthFeeRouter have
+      // different ABIs (pancakeRouter() vs uniswapRouter()) despite sharing
+      // the same swap function signatures — branch on the actual chain
+      // family, not on a single hardcoded chain, so this works for every
+      // BSC-style chain (testnet or mainnet) and every EthFeeRouter-style
+      // chain (Sepolia, Arbitrum, or future additions) alike.
+      const isBscFamily =
+        chainId === contracts.bscTestnet.chainId || chainId === contracts.bscMainnet.chainId;
+      const abi = isBscFamily ? FeeRouterABI : EthFeeRouterABI;
 
       let wethAddress: Address;
 
       if (chainId === contracts.bscTestnet.chainId) {
         wethAddress = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd';
+      } else if (isBscFamily) {
+        const routerAddress = await publicClient.readContract({
+          address: feeRouterAddress,
+          abi: FeeRouterABI,
+          functionName: 'pancakeRouter',
+        }) as Address;
+        wethAddress = await publicClient.readContract({
+          address: routerAddress,
+          abi: V2RouterABI,
+          functionName: 'WETH',
+        }) as Address;
       } else {
         const routerAddress = await publicClient.readContract({
           address: feeRouterAddress,
@@ -70,13 +92,13 @@ export function useSwap() {
 
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20); // 20 mins
 
-      const abi = chainId === contracts.sepolia.chainId ? EthFeeRouterABI : FeeRouterABI;
-
       if (isNativeIn) {
         await writeContractAsync({
           address: feeRouterAddress,
           abi,
-          functionName: 'swapExactETHForTokensWithFee',
+          functionName: feeOnTransfer
+            ? 'swapExactETHForTokensWithFeeSupportingFeeOnTransferTokens'
+            : 'swapExactETHForTokensWithFee',
           args: [amountOutMin, path, recipient, deadline],
           value: amountIn,
         });
@@ -84,7 +106,9 @@ export function useSwap() {
         await writeContractAsync({
           address: feeRouterAddress,
           abi,
-          functionName: 'swapExactTokensForTokensWithFee',
+          functionName: feeOnTransfer
+            ? 'swapExactTokensForTokensWithFeeSupportingFeeOnTransferTokens'
+            : 'swapExactTokensForTokensWithFee',
           args: [amountIn, amountOutMin, path, recipient, deadline],
         });
       }

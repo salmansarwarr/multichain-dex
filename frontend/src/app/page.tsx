@@ -21,8 +21,30 @@ export default function Home() {
           Connect the best DeFi and Web3 tokens in the crypto world within the Alphaterracoin Ecosystem.
         </p>
 
-        <SwapCard />
-        
+        <div className="w-full flex items-center justify-center gap-6 mt-6">
+          <video
+            src="/princess-alphaterra-video.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="hidden lg:block w-40 xl:w-48 rounded-2xl shadow-xl shadow-primary/10"
+            aria-label="Princess Alphaterra"
+          />
+
+          <SwapCard />
+
+          <video
+            src="/alfat-man-video.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="hidden lg:block w-40 xl:w-48 rounded-2xl shadow-xl shadow-primary/10"
+            aria-label="Alfat Man"
+          />
+        </div>
+
         {isConnected && (
           <SwapHistory chainId={chain?.id} />
         )}
