@@ -14,7 +14,7 @@ export const TOKEN_SWAP_LIMITS: Record<string, { min: number; max: number }> = {
   BUSD: { min: 1, max: 20_000 },
   UNI: { min: 1, max: 5_000 },
   USDC: { min: 1, max: 20_000 },
-  Alfat: { min: 100, max: 5_000_000 },
+  Alfat: { min: 100, max: 1_000_000 },
 };
 
 // Applied when a token (e.g. one added via paste-address search) has no

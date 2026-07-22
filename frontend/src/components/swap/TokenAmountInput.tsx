@@ -1,6 +1,7 @@
 import { Token } from '@/data/tokens';
 import { useState } from 'react';
 import { TokenSelector } from './TokenSelector';
+import { TokenIcon } from './TokenIcon';
 
 interface TokenAmountInputProps {
   label: string;
@@ -75,9 +76,7 @@ export function TokenAmountInput({
             >
               {token ? (
                 <>
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary/80 to-purple-500/80 flex items-center justify-center text-xs">
-                    {token.symbol[0]}
-                  </div>
+                  <TokenIcon token={token} className="w-6 h-6 text-xs" />
                   <span>{token.symbol}</span>
                 </>
               ) : (
@@ -91,9 +90,7 @@ export function TokenAmountInput({
             <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 font-bold">
               {token && (
                 <>
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary/80 to-purple-500/80 flex items-center justify-center text-xs">
-                    {token.symbol[0]}
-                  </div>
+                  <TokenIcon token={token} className="w-6 h-6 text-xs" />
                   <span>{token.symbol}</span>
                 </>
               )}

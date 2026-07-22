@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Token } from '@/data/tokens';
 import { useCustomToken } from '@/hooks/useCustomToken';
+import { TokenIcon } from './TokenIcon';
 
 interface TokenSelectorProps {
   isOpen: boolean;
@@ -76,9 +77,7 @@ export function TokenSelector({ isOpen, onClose, tokens, onSelect, chainId }: To
               }}
               className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left border-b border-border/50"
             >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/80 to-purple-500/80 flex items-center justify-center text-white font-bold shrink-0">
-                {customToken.symbol[0]}
-              </div>
+              <TokenIcon token={customToken} className="w-10 h-10 text-white" />
               <div>
                 <div className="font-bold text-white">{customToken.symbol}</div>
                 <div className="text-xs text-text-muted">{customToken.name} · found by address</div>
@@ -98,9 +97,7 @@ export function TokenSelector({ isOpen, onClose, tokens, onSelect, chainId }: To
                 }}
                 className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors text-left"
               >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/80 to-purple-500/80 flex items-center justify-center text-white font-bold shrink-0">
-                  {token.symbol[0]}
-                </div>
+                <TokenIcon token={token} className="w-10 h-10 text-white" />
                 <div>
                   <div className="font-bold text-white">{token.symbol}</div>
                   <div className="text-xs text-text-muted">{token.name}</div>

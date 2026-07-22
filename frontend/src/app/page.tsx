@@ -1,10 +1,23 @@
 'use client';
 
+import Image from 'next/image';
 import { Header } from '@/components/layout/Header';
 import { SwapCard } from '@/components/ui/SwapCard';
 import { WalletStatus } from '@/components/ui/WalletStatus';
 import { SwapHistory } from '@/components/swap/SwapHistory';
 import { useAccount } from 'wagmi';
+
+const WEBSITE_URL = 'https://alphaterracoin.com/';
+// TODO: replace with the real OpenSea collection URL.
+const NFT_COLLECTION_URL = 'https://opensea.io/';
+
+function HexagonIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+      <path d="M9 3.5h6L21 12l-6 8.5H9L3 12z" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 export default function Home() {
   const { chain, isConnected } = useAccount();
@@ -21,28 +34,73 @@ export default function Home() {
           Connect the best DeFi and Web3 tokens in the crypto world within the Alphaterracoin Ecosystem.
         </p>
 
-        <div className="w-full flex items-center justify-center gap-6 mt-6">
-          <video
-            src="/princess-alphaterra-video.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="hidden lg:block w-40 xl:w-48 rounded-2xl shadow-xl shadow-primary/10"
-            aria-label="Princess Alphaterra"
-          />
+        <div className="w-full flex items-start justify-center gap-6 mt-6">
+          <div className="hidden lg:flex flex-col items-center gap-4 flex-1 max-w-xs">
+            <a
+              href={WEBSITE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Alphaterracoin website"
+              className="text-primary hover:text-primary-hover transition-colors"
+            >
+              <HexagonIcon className="w-8 h-8" />
+            </a>
+
+            <div className="relative w-full max-w-[320px] aspect-square rounded-2xl border-2 border-primary/30 overflow-hidden flex items-center justify-center shadow-xl shadow-primary/10">
+              <video
+                src="/princess-alphaterra-video.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                aria-label="Princess Alphaterra"
+              />
+              <Image
+                src="/alfat-terra-logo.png"
+                alt="Alfat"
+                width={64}
+                height={64}
+                className="absolute bottom-3 left-3 w-16 h-16 rounded-full border-2 border-white/20 shadow-lg shadow-primary/30"
+              />
+            </div>
+
+            <p className="text-center text-sm text-text-muted">
+              Buy and sales in secure Top Crypto Worldwide and Alfat Token with{' '}
+              <span className="text-primary font-semibold">Princess Alphaterra</span>
+            </p>
+          </div>
 
           <SwapCard />
 
-          <video
-            src="/alfat-man-video.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="hidden lg:block w-40 xl:w-48 rounded-2xl shadow-xl shadow-primary/10"
-            aria-label="Alfat Man"
-          />
+          <div className="hidden lg:flex flex-col items-center gap-4 flex-1 max-w-xs">
+            <a
+              href={NFT_COLLECTION_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Alphaterra NFT collection on OpenSea"
+              className="text-primary hover:text-primary-hover transition-colors"
+            >
+              <HexagonIcon className="w-8 h-8" />
+            </a>
+
+            <div className="relative w-full max-w-[320px] aspect-square rounded-2xl border-2 border-primary/30 overflow-hidden flex items-center justify-center shadow-xl shadow-primary/10">
+              <video
+                src="/alfat-man-video.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                aria-label="Alfat Man"
+              />
+            </div>
+
+            <p className="text-center text-sm text-text-muted">
+              Swap Best worldwide Tokens in Decentralized Mode with small Fees transactions with{' '}
+              <span className="text-primary font-semibold">Alfat Man</span>
+            </p>
+          </div>
         </div>
 
         {isConnected && (
