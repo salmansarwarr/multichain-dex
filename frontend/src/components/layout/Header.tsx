@@ -14,9 +14,9 @@ export function Header() {
         <Image
           src="/alfat-terra-logo.png"
           alt="AlphaterraSwapX"
-          width={32}
-          height={32}
-          className="w-8 h-8 rounded-full shadow-lg shadow-primary/20"
+          width={80}
+          height={80}
+          className="w-20 h-20 rounded-full shadow-lg shadow-primary/20"
           priority
         />
         <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">

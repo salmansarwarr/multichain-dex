@@ -13,6 +13,16 @@ import { createConfig, http } from 'wagmi';
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID';
 
+// WalletConnect (used by Trust/Binance/OKX/etc. whenever the matching
+// extension isn't detected) shows this metadata in the wallet app during
+// pairing, and some wallets use it to verify the requesting origin. appUrl
+// is left unset so RainbowKit defaults it to window.location.origin — it
+// always matches whatever domain the app is actually served from (localhost
+// in dev, the real domain in prod) instead of a hardcoded value that would
+// go stale.
+const siteOrigin =
+  typeof window !== 'undefined' ? window.location.origin : 'https://alphaterracoin.com';
+
 const connectors = connectorsForWallets(
   [
     {
@@ -30,6 +40,9 @@ const connectors = connectorsForWallets(
   ],
   {
     appName: 'AlphaterraSwapX',
+    appDescription:
+      'Multichain DEX for the Alphaterracoin ecosystem — swap tokens across BSC, Ethereum, and Arbitrum.',
+    appIcon: `${siteOrigin}/alfat-terra-logo.png`,
     projectId,
   },
 );

@@ -366,6 +366,100 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/32417/large/cgicon.png?1747892021',
   },
+  // Below: "Binance-Peg" wrapped/custodied BEP-20 versions of coins that are
+  // natively on their own chain (client request — a licensed/custodian
+  // version carries bridging risk, unlike the native coin itself). Each was
+  // confirmed two ways before being added: (1) the coin's dedicated
+  // `binance-peg-*` id on CoinGecko (Binance-Peg tokens are NOT listed under
+  // the native coin's own `platforms` field — they're separate CoinGecko
+  // entries), cross-checked against (2) a verified, name/symbol-matching
+  // contract on BscScan. Candidates without a matching pair on both sources
+  // were left out rather than guessed — see PR discussion for the excluded
+  // list (e.g. no official Binance-Peg version exists for Monero, Tron,
+  // Toncoin, ICP, Hedera, Aptos, Sui, VeChain, Algorand, Stellar, Ethereum
+  // Classic, Kaspa, Sei, Celestia, THORChain, Mina, Flow, MultiversX, Dash,
+  // Kusama, Waves, or Qtum as of this writing).
+  {
+    address: '0x570A5D26f7765Ecb712C0924E4De545B89fD43dF',
+    symbol: 'SOL',
+    name: 'Binance-Peg Solana',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/54582/large/wsol.png?1740542147',
+  },
+  {
+    address: '0x8fF795a6F4D97E7887C79beA79aba5cc76444aDf',
+    symbol: 'BCH',
+    name: 'Binance-Peg Bitcoin Cash',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/15774/large/bitcoin-cash-circle.png?1696515398',
+  },
+  {
+    address: '0x1Fa4a73a3F0133f0025378af00236f3aBDEE5D63',
+    symbol: 'NEAR',
+    name: 'Binance-Peg NEAR Protocol',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/51252/large/NEAR.JPG?1730470269',
+  },
+  {
+    address: '0x0D8Ce2A99Bb6e3B7Db580eD848240e4a0F9aE153',
+    symbol: 'FIL',
+    name: 'Binance-Peg Filecoin',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/15776/large/filecoin.png?1696515400',
+  },
+  {
+    address: '0x56b6fB708fC5732DEC1Afc8D8556423A2EDcCbD6',
+    symbol: 'EOS',
+    name: 'Binance-Peg EOS',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/15771/large/eos-eos-logo.png?1696515395',
+  },
+  {
+    address: '0x16939ef78684453bfDFb47825F8a5F714f12623a',
+    symbol: 'XTZ',
+    name: 'Binance-Peg Tezos',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/51251/large/TEZOS.png?1730470163',
+  },
+  {
+    address: '0x1Ba42e5193dfA8B03D15dd1B86a3113bbBEF8Eeb',
+    symbol: 'ZEC',
+    name: 'Binance-Peg Zcash',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/70075/large/zcash.png?1760512015',
+  },
+  // Found via CoinGecko's authoritative `binance-peg-tokens` category listing
+  // (the complete, canonical set of every Binance-Peg token that exists —
+  // used to double-check nothing above was missed and that no other native
+  // L1 coin in this batch has an official peg).
+  {
+    address: '0x1CE0c2827e2eF14D5C4f29a091d735A204794041',
+    symbol: 'AVAX',
+    name: 'Binance-Peg Avalanche',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/18674/large/avax_logo_1.png?1696518143',
+  },
+  {
+    address: '0xFd7B3A77848f1C2D67E05E54d78d174a0C850335',
+    symbol: 'ONT',
+    name: 'Binance-Peg Ontology',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/18559/large/ont.png?1696518037',
+  },
+  {
+    address: '0x9678E42ceBEb63F23197D726B29b1CB20d0064E5',
+    symbol: 'IOTX',
+    name: 'Binance-Peg IoTeX',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/15978/large/iotex-logo.png?1696515591',
+  },
+  {
+    address: '0xd5d0322b6bAb6a762C79f8c81A0B674778E13aeD',
+    symbol: 'FIRO',
+    name: 'Binance-Peg Firo',
+    decimals: 8,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/20128/large/firocoingecko.png?1696519544',
+  },
 ];
 
 export const SEPOLIA_TOKENS: Token[] = [

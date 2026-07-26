@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { Header } from '@/components/layout/Header';
 import { SwapCard } from '@/components/ui/SwapCard';
 import { WalletStatus } from '@/components/ui/WalletStatus';
@@ -8,8 +7,10 @@ import { SwapHistory } from '@/components/swap/SwapHistory';
 import { useAccount } from 'wagmi';
 
 const WEBSITE_URL = 'https://alphaterracoin.com/';
-// TODO: replace with the real OpenSea collection URL.
-const NFT_COLLECTION_URL = 'https://opensea.io/';
+const NFT_MINT_URL = 'https://nft-mint.alphaterracoin.com/';
+const NFT_OPENSEA_URL =
+  'https://opensea.io/fr/0x937cd31d806fc4ebd9a5a70c34809482e3166b6b?sortBy=listed_date';
+const BINANCE_URL = 'https://www.binance.com/en';
 
 function HexagonIcon({ className }: { className?: string }) {
   return (
@@ -34,6 +35,41 @@ export default function Home() {
           Connect the best DeFi and Web3 tokens in the crypto world within the Alphaterracoin Ecosystem.
         </p>
 
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href={WEBSITE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-sm text-center transition-all shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_30px_rgba(124,58,237,0.5)]"
+          >
+            Website Alphaterracoin
+          </a>
+          <a
+            href={NFT_MINT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-sm text-center transition-all shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_30px_rgba(124,58,237,0.5)]"
+          >
+            Website NFT Art Collection of Alfat
+          </a>
+          <a
+            href={NFT_OPENSEA_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-sm text-center transition-all shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_30px_rgba(124,58,237,0.5)]"
+          >
+            NFT Art Collection in Opensea of Alfat
+          </a>
+          <a
+            href={BINANCE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-sm text-center transition-all shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_30px_rgba(124,58,237,0.5)]"
+          >
+            Trade on Binance
+          </a>
+        </div>
+
         <div className="w-full flex items-start justify-center gap-6 mt-6">
           <div className="hidden lg:flex flex-col items-center gap-4 flex-1 max-w-xs">
             <a
@@ -41,9 +77,10 @@ export default function Home() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Alphaterracoin website"
-              className="text-primary hover:text-primary-hover transition-colors"
+              className="flex items-center gap-2 text-primary hover:text-primary-hover transition-colors"
             >
-              <HexagonIcon className="w-8 h-8" />
+              <HexagonIcon className="w-8 h-8 flex-shrink-0" />
+              <span className="text-sm font-semibold">Website: Alphaterracoin.com</span>
             </a>
 
             <div className="relative w-full max-w-[320px] aspect-square rounded-2xl border-2 border-primary/30 overflow-hidden flex items-center justify-center shadow-xl shadow-primary/10">
@@ -56,12 +93,12 @@ export default function Home() {
                 className="w-full h-full object-cover"
                 aria-label="Princess Alphaterra"
               />
-              <Image
-                src="/alfat-terra-logo.png"
-                alt="Alfat"
-                width={64}
-                height={64}
-                className="absolute bottom-3 left-3 w-16 h-16 rounded-full border-2 border-white/20 shadow-lg shadow-primary/30"
+              <div
+                className="absolute top-0 left-0 w-[46%] h-[38%] pointer-events-none"
+                style={{
+                  background:
+                    'radial-gradient(ellipse at top left, #000 45%, rgba(0,0,0,0) 75%)',
+                }}
               />
             </div>
 
@@ -74,15 +111,28 @@ export default function Home() {
           <SwapCard />
 
           <div className="hidden lg:flex flex-col items-center gap-4 flex-1 max-w-xs">
-            <a
-              href={NFT_COLLECTION_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Alphaterra NFT collection on OpenSea"
-              className="text-primary hover:text-primary-hover transition-colors"
-            >
-              <HexagonIcon className="w-8 h-8" />
-            </a>
+            <div className="flex items-center gap-3">
+              <a
+                href={NFT_OPENSEA_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Alphaterra NFT art collection on OpenSea"
+                className="text-primary hover:text-primary-hover transition-colors"
+                title="NFT Art Collection on OpenSea"
+              >
+                <HexagonIcon className="w-8 h-8" />
+              </a>
+              <a
+                href={NFT_MINT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Alphaterra NFT website"
+                className="text-primary hover:text-primary-hover transition-colors"
+                title="NFT Website of Alfat"
+              >
+                <HexagonIcon className="w-8 h-8" />
+              </a>
+            </div>
 
             <div className="relative w-full max-w-[320px] aspect-square rounded-2xl border-2 border-primary/30 overflow-hidden flex items-center justify-center shadow-xl shadow-primary/10">
               <video
