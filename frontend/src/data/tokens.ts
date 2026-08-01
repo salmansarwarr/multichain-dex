@@ -488,6 +488,18 @@ export const SEPOLIA_TOKENS: Token[] = [
   }
 ];
 
+// Arbitrum Sepolia has no confirmed live Uniswap-V2-compatible DEX (see
+// docs/deployments.md), so deploy-arbitrum-sepolia.ts deploys its own mock
+// router + mock tWETH/tUSDC and seeds the router with tUSDC liquidity.
+// These addresses MUST match contracts/deployments/arbitrum-sepolia.json's
+// `mocks` block exactly, or swaps here will revert (the token exists but
+// has no liquidity in this router, or doesn't exist at all). They
+// previously pointed at two unrelated addresses that were never part of
+// this deployment — fixed here to match the deployment record.
+//
+// No tUSDT mock has been deployed/seeded yet, so USDT isn't listed for
+// this network — see conversation history (2026-08-01) for the deploy step
+// still needed to add it.
 export const ARBITRUM_SEPOLIA_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -498,16 +510,16 @@ export const ARBITRUM_SEPOLIA_TOKENS: Token[] = [
     logoURI: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
   },
   {
-    address: '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73',
-    symbol: 'WETH',
-    name: 'Wrapped Ether',
+    address: '0xBd018b76A06C51f000EB3DB6a1861384643D5E16',
+    symbol: 'tWETH',
+    name: 'Test Wrapped ETH',
     decimals: 18,
     logoURI: TRUSTWALLET_ETH('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'),
   },
   {
-    address: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    symbol: 'USDC',
-    name: 'USD Coin',
+    address: '0x82f89bBD87c75F915736E5d346dD48f40d66c8e0',
+    symbol: 'tUSDC',
+    name: 'Test USD Coin',
     decimals: 6,
     logoURI: TRUSTWALLET_ETH('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'),
   }
@@ -1004,6 +1016,20 @@ export const ARBITRUM_MAINNET_TOKENS: Token[] = [
     name: 'USDC',
     decimals: 6,
     logoURI: 'https://coin-images.coingecko.com/coins/images/6319/large/USDC.png?1769615602',
+  },
+  {
+    // Verified on Arbiscan: this is the dominant/highest-liquidity USDT on
+    // Arbitrum One (Tether's own token, bridged via the standard Arbitrum
+    // bridge). Its on-chain name()/symbol() now read "USD₮0" / "USD₮0",
+    // not "USDT" — Tether renamed it as part of its 2025 omnichain (LayerZero
+    // OFT) rebrand. Listed here as USDT for user-facing familiarity since
+    // that's the client's ask; the on-chain symbol will still show as
+    // USD₮0 in wallets like MetaMask, which is expected and not a bug.
+    address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+    symbol: 'USDT',
+    name: 'USD₮0 (Tether, Arbitrum)',
+    decimals: 6,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/325/large/Tether.png?1696501661',
   },
   {
     address: '0x1b896893dfc86bb67cf57767298b9073d2c1ba2c',
