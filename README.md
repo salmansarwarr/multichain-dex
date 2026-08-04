@@ -65,7 +65,7 @@ emergency stop, `ReentrancyGuard`, `SafeERC20` throughout.
 
 ```bash
 cd contracts
-npm test              # 12/12 unit tests
+npm test              # 34/34 unit tests (runs both routers' suites together)
 npm run gas-report     # gas benchmark — see docs/gas-report-phase1.md
 npm run audit:slither  # static analysis — see docs/testing-phase1.md
 ```
@@ -91,7 +91,7 @@ Phase 1's FeeRouter, plus explicit handling for fee-on-transfer
 
 ```bash
 cd contracts
-npm test                  # 24/24 unit tests (both routers)
+npm test                  # 34/34 unit tests (both routers)
 npm run gas-report         # see docs/gas-report-phase2.md
 npm run audit:slither      # see docs/testing-phase2.md
 ```

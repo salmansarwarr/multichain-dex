@@ -2,17 +2,37 @@
   "network": "bscTestnet",
   "chainId": 97,
   "contract": "FeeRouter",
-  "address": "0xBd018b76A06C51f000EB3DB6a1861384643D5E16",
-  "deployTxHash": "0x5db70a8b2ec5561d7e58530e5caeee65a43f6e58dcb7315b776bd1e1d13972c2",
-  "deployedAt": "2026-07-08T19:45:33.911Z",
+  "address": "0xBbD4Ff24f2c28e6dAe5f083eb0C98EF65c2fd9e9",
+  "deployTxHash": "0x2a85ed7e91050166a21dd2e195a30f45c01e67369aa2515589f64f869f914191",
+  "deployedAt": "2026-08-04T11:42:53.206Z",
   "constructorArgs": {
     "pancakeRouter": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1",
     "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
     "feeBps": 15,
     "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
   },
-  "feeWalletUpdatedAt": "2026-07-13T17:54:05.454Z",
-  "feeWalletUpdateTxHash": "0xff2f4c13088f92aff557881b33ed253fd6ee054d55402077fa93ff4cd3fbd956",
-  "ownerTransferredAt": "2026-07-22T16:12:09.981Z",
-  "ownerTransferTxHash": "0x31ab80d0126b6ccc6d6762aac68b76530c16fd0278e3bba18f0c8c8c2598e21b"
+  "previousDeployments": [
+    {
+      "network": "bscTestnet",
+      "chainId": 97,
+      "contract": "FeeRouter",
+      "address": "0xBd018b76A06C51f000EB3DB6a1861384643D5E16",
+      "deployTxHash": "0x5db70a8b2ec5561d7e58530e5caeee65a43f6e58dcb7315b776bd1e1d13972c2",
+      "deployedAt": "2026-07-08T19:45:33.911Z",
+      "constructorArgs": {
+        "pancakeRouter": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1",
+        "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+        "feeBps": 15,
+        "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+      },
+      "feeWalletUpdatedAt": "2026-07-13T17:54:05.454Z",
+      "feeWalletUpdateTxHash": "0xff2f4c13088f92aff557881b33ed253fd6ee054d55402077fa93ff4cd3fbd956",
+      "ownerTransferredAt": "2026-07-22T16:12:09.981Z",
+      "ownerTransferTxHash": "0x31ab80d0126b6ccc6d6762aac68b76530c16fd0278e3bba18f0c8c8c2598e21b",
+      "replacedAt": "2026-08-04T11:42:53.206Z",
+      "replacedReason": "2026-08-04 security-review fixes (feeWallet DoS, rescue functions, to!=0 check)"
+    }
+  ],
+  "ownerTransferredAt": "2026-08-04T12:28:01.693Z",
+  "ownerTransferTxHash": "0xd3421fb23c042800f25bd454bd471016455ab2af28dc518ab98bd60379b9e061"
 }

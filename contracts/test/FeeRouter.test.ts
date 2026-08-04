@@ -235,7 +235,7 @@ describe("FeeRouter", function () {
   });
 
   describe("Reentrancy attempt", function () {
-    it("blocks a malicious fee wallet from re-entering swapExactETHForTokensWithFee", async function () {
+    it("blocks a malicious fee wallet from re-entering, and the swap still succeeds with the fee held as pending", async function () {
       const { feeRouter, tokenOut, owner, user } = await loadFixture(deployFixture);
 
       const MaliciousFeeWallet = await ethers.getContractFactory("MaliciousFeeWallet");
@@ -249,24 +249,164 @@ describe("FeeRouter", function () {
 
       const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
       const amountIn = ethers.parseEther("1");
+      const { fee, afterFee } = computeFee(amountIn);
 
-      // The outer swap itself must revert: the reentrant call inside
-      // MaliciousFeeWallet.receive() reverts, which unwinds the raw `.call`
-      // in FeeRouter — since we check `sent` and revert with
-      // EthTransferFailed, the whole tx reverts, proving the guard held.
+      // The reentrant call inside MaliciousFeeWallet.receive() still
+      // reverts (nonReentrant holds — attacked() stays false), but that no
+      // longer takes the whole swap down with it: the failed fee push is
+      // now credited to pendingEthFees instead, and the user's swap
+      // completes normally. This is the fix for the feeWallet-DoS finding.
+      const tx = feeRouter
+        .connect(user)
+        .swapExactETHForTokensWithFee(
+          0,
+          [await feeRouter.pancakeRouter(), await tokenOut.getAddress()],
+          user.address,
+          deadline,
+          { value: amountIn }
+        );
+
+      await expect(tx)
+        .to.emit(feeRouter, "FeeWalletTransferFailed")
+        .withArgs(await attacker.getAddress(), fee);
+      await expect(tx).to.emit(feeRouter, "SwapExecuted");
+
+      expect(await attacker.attacked()).to.equal(false);
+      expect(await feeRouter.pendingEthFees()).to.equal(fee);
+      expect(await tokenOut.balanceOf(user.address)).to.equal(afterFee);
+    });
+
+    it("lets a fixed feeWallet withdraw fees that were previously stuck as pending", async function () {
+      const { feeRouter, tokenOut, owner, user, other } = await loadFixture(deployFixture);
+
+      const MaliciousFeeWallet = await ethers.getContractFactory("MaliciousFeeWallet");
+      const attacker = await MaliciousFeeWallet.deploy(await feeRouter.getAddress());
+      await feeRouter.connect(owner).setFeeWallet(await attacker.getAddress());
+      await attacker.setAttackPath([await feeRouter.pancakeRouter(), await tokenOut.getAddress()]);
+
+      const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+      const amountIn = ethers.parseEther("1");
+      const { fee } = computeFee(amountIn);
+
+      await feeRouter
+        .connect(user)
+        .swapExactETHForTokensWithFee(
+          0,
+          [await feeRouter.pancakeRouter(), await tokenOut.getAddress()],
+          user.address,
+          deadline,
+          { value: amountIn }
+        );
+      expect(await feeRouter.pendingEthFees()).to.equal(fee);
+
+      // Owner fixes feeWallet to a normal address that can actually receive ETH.
+      await feeRouter.connect(owner).setFeeWallet(other.address);
+
+      // Old feeWallet (the malicious contract) can no longer withdraw.
+      await expect(
+        feeRouter.connect(user).withdrawPendingEthFees()
+      ).to.be.revertedWithCustomError(feeRouter, "NotFeeWallet");
+
+      const balBefore = await ethers.provider.getBalance(other.address);
+      const withdrawTx = await feeRouter.connect(other).withdrawPendingEthFees();
+      const receipt = await withdrawTx.wait();
+      const gasCost = receipt!.gasUsed * receipt!.gasPrice;
+      const balAfter = await ethers.provider.getBalance(other.address);
+
+      expect(balAfter - balBefore + gasCost).to.equal(fee);
+      expect(await feeRouter.pendingEthFees()).to.equal(0);
+
+      await expect(
+        feeRouter.connect(other).withdrawPendingEthFees()
+      ).to.be.revertedWithCustomError(feeRouter, "NothingToWithdraw");
+    });
+  });
+
+  describe("to == address(0) validation", function () {
+    it("reverts swapExactTokensForTokensWithFee and swapExactETHForTokensWithFee when to is the zero address", async function () {
+      const { feeRouter, tokenIn, tokenOut, user } = await loadFixture(deployFixture);
+      const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+      await expect(
+        feeRouter
+          .connect(user)
+          .swapExactTokensForTokensWithFee(
+            ONE_TOKEN,
+            0,
+            [await tokenIn.getAddress(), await tokenOut.getAddress()],
+            ethers.ZeroAddress,
+            deadline
+          )
+      ).to.be.revertedWithCustomError(feeRouter, "ZeroAddress");
+
       await expect(
         feeRouter
           .connect(user)
           .swapExactETHForTokensWithFee(
             0,
             [await feeRouter.pancakeRouter(), await tokenOut.getAddress()],
-            user.address,
+            ethers.ZeroAddress,
             deadline,
-            { value: amountIn }
+            { value: ethers.parseEther("1") }
           )
-      ).to.be.reverted;
+      ).to.be.revertedWithCustomError(feeRouter, "ZeroAddress");
+    });
+  });
 
-      expect(await attacker.attacked()).to.equal(false);
+  describe("Rescue functions", function () {
+    it("lets the owner rescue tokens sent directly to the contract, but not pending fees", async function () {
+      const { feeRouter, tokenIn, owner, other } = await loadFixture(deployFixture);
+
+      // Simulate an accidental direct transfer, outside the swap flow.
+      await tokenIn.mint(await feeRouter.getAddress(), ethers.parseUnits("5", 18));
+
+      await expect(
+        feeRouter.connect(other).rescueERC20(await tokenIn.getAddress(), ethers.parseUnits("5", 18), other.address)
+      ).to.be.revertedWithCustomError(feeRouter, "OwnableUnauthorizedAccount");
+
+      await feeRouter.connect(owner).rescueERC20(await tokenIn.getAddress(), ethers.parseUnits("5", 18), other.address);
+      expect(await tokenIn.balanceOf(other.address)).to.equal(ethers.parseUnits("5", 18));
+
+      // Can't rescue more than what's actually sitting there.
+      await expect(
+        feeRouter.connect(owner).rescueERC20(await tokenIn.getAddress(), 1, other.address)
+      ).to.be.revertedWithCustomError(feeRouter, "InsufficientRescueBalance");
+    });
+
+    it("lets the owner rescue stray ETH but never touches pendingEthFees", async function () {
+      const { feeRouter, tokenOut, owner, user, other } = await loadFixture(deployFixture);
+
+      // Accrue a pending fee via the malicious-feeWallet path.
+      const MaliciousFeeWallet = await ethers.getContractFactory("MaliciousFeeWallet");
+      const attacker = await MaliciousFeeWallet.deploy(await feeRouter.getAddress());
+      await feeRouter.connect(owner).setFeeWallet(await attacker.getAddress());
+      await attacker.setAttackPath([await feeRouter.pancakeRouter(), await tokenOut.getAddress()]);
+      const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+      const amountIn = ethers.parseEther("1");
+      const { fee } = computeFee(amountIn);
+      await feeRouter
+        .connect(user)
+        .swapExactETHForTokensWithFee(
+          0,
+          [await feeRouter.pancakeRouter(), await tokenOut.getAddress()],
+          user.address,
+          deadline,
+          { value: amountIn }
+        );
+
+      // Also send some stray ETH directly.
+      await owner.sendTransaction({ to: await feeRouter.getAddress(), value: ethers.parseEther("2") });
+
+      // Only the stray 2 ETH is rescuable, not the pending fee.
+      await expect(
+        feeRouter.connect(owner).rescueETH(ethers.parseEther("2") + fee, other.address)
+      ).to.be.revertedWithCustomError(feeRouter, "InsufficientRescueBalance");
+
+      const balBefore = await ethers.provider.getBalance(other.address);
+      await feeRouter.connect(owner).rescueETH(ethers.parseEther("2"), other.address);
+      const balAfter = await ethers.provider.getBalance(other.address);
+      expect(balAfter - balBefore).to.equal(ethers.parseEther("2"));
+      expect(await feeRouter.pendingEthFees()).to.equal(fee);
     });
   });
 

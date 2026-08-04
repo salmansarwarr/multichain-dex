@@ -2,22 +2,42 @@
   "network": "sepolia",
   "chainId": 11155111,
   "contract": "EthFeeRouter",
-  "address": "0x0f3eA3301da9DD6d287130bDb8454302808CbcC2",
-  "deployTxHash": "0x97eeb5db7b12e37a2fd2672d5a6b75b699f5b06b0515bce045e300bc8ff6722e",
-  "deployedAt": "2026-07-08T19:41:51.808Z",
+  "address": "0x5d02b756d416231fe71188e2F73C54446140bb56",
+  "deployTxHash": "0x5b9c6367b5d06fb84cc7235d7c93157cbf37633a6455e60560aac92694a29ac3",
+  "deployedAt": "2026-08-04T11:44:01.838Z",
   "constructorArgs": {
     "uniswapRouter": "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008",
     "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
     "feeBps": 15,
     "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
   },
-  "feeWalletUpdatedAt": "2026-07-13T17:55:15.932Z",
-  "feeWalletUpdateTxHash": "0xdade584b3706f8dac369c4a2a68f199ce66532ebf373e1552108ccaca5ca1fa7",
-  "ownerTransferredAt": "2026-07-22T16:12:25.210Z",
-  "ownerTransferTxHash": "0x4118e5e67f81a86ae840b4a822443495ff98d56afe686bdd2d3d441db131b5b2",
+  "previousDeployments": [
+    {
+      "network": "sepolia",
+      "chainId": 11155111,
+      "contract": "EthFeeRouter",
+      "address": "0x0f3eA3301da9DD6d287130bDb8454302808CbcC2",
+      "deployTxHash": "0x97eeb5db7b12e37a2fd2672d5a6b75b699f5b06b0515bce045e300bc8ff6722e",
+      "deployedAt": "2026-07-08T19:41:51.808Z",
+      "constructorArgs": {
+        "uniswapRouter": "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008",
+        "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+        "feeBps": 15,
+        "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+      },
+      "feeWalletUpdatedAt": "2026-07-13T17:55:15.932Z",
+      "feeWalletUpdateTxHash": "0xdade584b3706f8dac369c4a2a68f199ce66532ebf373e1552108ccaca5ca1fa7",
+      "ownerTransferredAt": "2026-07-22T16:12:25.210Z",
+      "ownerTransferTxHash": "0x4118e5e67f81a86ae840b4a822443495ff98d56afe686bdd2d3d441db131b5b2",
+      "replacedAt": "2026-08-04T11:44:01.838Z",
+      "replacedReason": "2026-08-04 security-review fixes (feeWallet DoS, rescue functions, to!=0 check)"
+    }
+  ],
   "mocks": {
     "tUSDT": "0x2D87204F285a897cEe2B3498d6AdD24f27EB4aFD",
     "tUSDTNote": "No official Sepolia USDT with existing WETH liquidity found (checked on-chain via factory.getPair against several known faucet USDT tokens). Deployed our own mock and seeded a real WETH/tUSDT pair via addLiquidityETH on the actual Uniswap V2 router — this one is NOT a mock router like Arbitrum Sepolia's, it's the real Sepolia Uniswap deployment.",
     "tUSDTAddedAt": "2026-08-03T21:31:00.857Z"
-  }
+  },
+  "ownerTransferredAt": "2026-08-04T12:29:15.638Z",
+  "ownerTransferTxHash": "0x0a0d184033321ad443e295bb548ea31622561080b931ea5b3795d7d36a031a20"
 }

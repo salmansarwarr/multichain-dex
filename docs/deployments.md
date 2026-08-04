@@ -42,12 +42,33 @@ npm run set-fee-wallet:arbitrum-sepolia
 
 `DEPLOYER_PRIVATE_KEY` must correspond to the contract's current owner.
 
-**Current status (2026-07-13):** BSC Testnet and Sepolia were deployed with
-`feeWallet = 0x348DC510bEDCccB42AF5b720Fe474366379e052B` (a dev/test wallet),
-not the project fee wallet `0x12e260D0a664736593173f335FcDcc1076eEA4De`. Run
-`set-fee-wallet:bsc-testnet` and `set-fee-wallet:sepolia` (with
-`BSC_FEE_WALLET_ADDRESS` / `ETH_FEE_WALLET_ADDRESS` set to the project fee
-wallet) to correct this before any further testing.
+**2026-08-04 redeploy:** all three testnet contracts were redeployed after a
+security review (manual + Slither + Hashlock AI Audit Tool — see the review
+artifact) surfaced a real DoS: a broken/reverting `feeWallet` blocked *all*
+swaps, not just fee delivery. Fixed via `_tryTransfer` — a failed fee push
+now degrades to a claimable `pendingTokenFees`/`pendingEthFees` balance
+instead of reverting the user's swap. Also added: owner-only rescue
+functions for stray funds, a `to != address(0)` check on every swap
+function, removed the dead `FeeWalletTransferFailed` event by actually
+wiring it up, and pinned the exact compiler version. Old addresses are
+archived in `contracts/deployments/*.json` under `previousDeployments`.
+Fee wallet was correct (`0x12e260D0a664736593173f335FcDcc1076eEA4De`) on all
+three from this deployment onward — the dev-wallet mixup from the original
+2026-07 deploy no longer applies.
+
+**Known gaps as of this redeploy:**
+- BSC Testnet: deployer wallet ran low on tBNB mid-verification — state
+  reads confirmed correct on-chain, but the swap itself hasn't been
+  smoke-tested against the *new* address yet. Needs a top-up from
+  https://testnet.bnbchain.org/faucet-smart before finishing.
+- Sepolia / Arbitrum Sepolia: swap + fee-correctness + access-control all
+  smoke-tested successfully on the new contracts. The `pause`/`unpause`
+  step specifically was **not** re-verified on-chain post-redeploy, because
+  ownership was transferred to the client's wallet before running the
+  smoke test (sequencing mistake — should have smoke-tested first). Both
+  functions are plain OpenZeppelin `Pausable` calls with no custom logic
+  and are covered by the 34-test unit suite against the same compiled
+  bytecode, so risk is low, but it wasn't independently exercised live.
 
 ---
 
@@ -55,9 +76,11 @@ wallet) to correct this before any further testing.
 
 | Chain | Contract | Address | Verified | Deployed At | Tx Hash | Fee Wallet |
 |---|---|---|---|---|---|---|
-| BSC Testnet (Chapel) | `FeeRouter` | `0xBd018b76A06C51f000EB3DB6a1861384643D5E16` | ✅ | 2026-07-09 | `0x600ae60d610992ff2d83fa1ee5627297c5377c73f2151308d3843802d24fcf92` | ⚠️ dev wallet — needs `set-fee-wallet:bsc-testnet` |
-| Ethereum Sepolia | `EthFeeRouter` | `0x0f3eA3301da9DD6d287130bDb8454302808CbcC2` | ✅ | 2026-07-09 | `0x4633f0575867ef62b9ab1d0095b33b99d5c23cbbb58fc8feb6741900f1e1f105` | ⚠️ dev wallet — needs `set-fee-wallet:sepolia` |
-| Arbitrum Sepolia | `EthFeeRouter` | — pending — | — | — | — | — |
+| BSC Testnet (Chapel) | `FeeRouter` | `0xBbD4Ff24f2c28e6dAe5f083eb0C98EF65c2fd9e9` | ✅ | 2026-08-04 | `0x2a85ed7e91050166a21dd2e195a30f45c01e67369aa2515589f64f869f914191` | ✅ `0x12e26...eA4De` |
+| Ethereum Sepolia | `EthFeeRouter` | `0x5d02b756d416231fe71188e2F73C54446140bb56` | ✅ | 2026-08-04 | `0x5b9c6367b5d06fb84cc7235d7c93157cbf37633a6455e60560aac92694a29ac3` | ✅ `0x12e26...eA4De` |
+| Arbitrum Sepolia | `EthFeeRouter` | `0x43aB86B6461297BF95Fbc7bd84Ab61d98F13969A` | ✅ | 2026-08-04 | `0x8d03e02040a70e3fb74acc23b71cd39857c8d8eec5cb6996b3a7152ddc7e91bd` | ✅ `0x12e26...eA4De` |
+
+All three: ownership transferred to `0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b` same day.
 
 **Explorers:**
 - BSC Testnet: `https://testnet.bscscan.com/address/<ADDRESS>#code`

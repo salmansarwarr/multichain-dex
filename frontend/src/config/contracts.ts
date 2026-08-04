@@ -3,7 +3,8 @@ import { Address } from 'viem';
 
 export const contracts = {
   bscTestnet: {
-    feeRouter: (process.env.NEXT_PUBLIC_BSC_FEE_ROUTER_ADDRESS as Address) || '0xBd018b76A06C51f000EB3DB6a1861384643D5E16',
+    // Redeployed 2026-08-04 (feeWallet-DoS fix, rescue functions, to!=0 check).
+    feeRouter: (process.env.NEXT_PUBLIC_BSC_FEE_ROUTER_ADDRESS as Address) || '0xBbD4Ff24f2c28e6dAe5f083eb0C98EF65c2fd9e9',
     chainId: customBscTestnet.id,
   },
   // Not deployed yet — FeeRouter.sol is code-ready (fee-on-transfer support
@@ -15,11 +16,13 @@ export const contracts = {
     chainId: customBsc.id,
   },
   sepolia: {
-    feeRouter: (process.env.NEXT_PUBLIC_ETH_FEE_ROUTER_ADDRESS as Address) || '0x0f3eA3301da9DD6d287130bDb8454302808CbcC2',
+    // Redeployed 2026-08-04 (feeWallet-DoS fix, rescue functions, to!=0 check).
+    feeRouter: (process.env.NEXT_PUBLIC_ETH_FEE_ROUTER_ADDRESS as Address) || '0x5d02b756d416231fe71188e2F73C54446140bb56',
     chainId: customSepolia.id,
   },
   arbitrumSepolia: {
-    feeRouter: (process.env.NEXT_PUBLIC_ARB_FEE_ROUTER_ADDRESS as Address) || '0x0000000000000000000000000000000000000000',
+    // Redeployed 2026-08-04 (feeWallet-DoS fix, rescue functions, to!=0 check).
+    feeRouter: (process.env.NEXT_PUBLIC_ARB_FEE_ROUTER_ADDRESS as Address) || '0x43aB86B6461297BF95Fbc7bd84Ab61d98F13969A',
     chainId: customArbitrumSepolia.id,
   },
   // Not deployed yet — Arbitrum only has a testnet (mock-DEX) deployment so far.
