@@ -15,7 +15,9 @@
     "note": "No official Uniswap-V2-compatible DEX confirmed live on Arbitrum Sepolia (verified via eth_getCode). These test fixtures stand in for it.",
     "mockRouter": "0x542e6c05156D8946730029589E5B785Cb40Cf1Ba",
     "tWETH": "0xBd018b76A06C51f000EB3DB6a1861384643D5E16",
-    "tUSDC": "0x82f89bBD87c75F915736E5d346dD48f40d66c8e0"
+    "tUSDC": "0x82f89bBD87c75F915736E5d346dD48f40d66c8e0",
+    "tUSDT": "0x2A2fe46305Fa7a4F72d73b7E18f36FFD7b37d914",
+    "tUSDTAddedAt": "2026-08-03T21:29:56.978Z"
   },
   "ownerTransferredAt": "2026-07-22T16:12:40.723Z",
   "ownerTransferTxHash": "0x1c3df3cf6f0667cf25b45ea3d17f7e647770301e8543fc5b4adc8c21e9e3e360"

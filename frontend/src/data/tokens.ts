@@ -39,6 +39,29 @@ export const BSC_TESTNET_TOKENS: Token[] = [
     name: 'BUSD Token',
     decimals: 18,
     logoURI: 'https://tokens.pancakeswap.finance/images/0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56.png',
+  },
+  {
+    // Verified two ways before adding (same bar as the mainnet list below):
+    // on-chain name()/symbol()/decimals() call confirms "Tether USD" / USDT
+    // / 18 decimals, AND factory.getPair(WBNB, this) against our actual
+    // deployed PancakeSwap-testnet router (0xD99D1c33...) returns a real
+    // pair with non-zero reserves — a swap against this router will
+    // actually succeed, unlike the Arbitrum Sepolia addresses this
+    // replaced a mismatch for earlier.
+    address: '0x66E972502A34A625828C544a1914E8D8cc2A9dE5',
+    symbol: 'USDT',
+    name: 'Tether USD',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/325/large/Tether.png?1696501661',
+  },
+  {
+    // Same verification: on-chain symbol()/decimals() confirmed, plus a
+    // real non-zero-reserve pair against WBNB on our deployed router.
+    address: '0x64544969ed7ebf5f083679233325356ebe738930',
+    symbol: 'USDC',
+    name: 'USDC Token',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/6319/large/USDC.png?1769615602',
   }
 ];
 
@@ -78,8 +101,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     name: 'Alphaterra',
     decimals: 9,
     isFeeOnTransfer: true,
-    // TODO: no official logo asset supplied yet — add once the client
-    // sends one (see limits.ts / conversation history).
+    logoURI: '/alfat-terra-logo.png',
   },
   {
     address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82',
@@ -485,6 +507,33 @@ export const SEPOLIA_TOKENS: Token[] = [
     name: 'Uniswap',
     decimals: 18,
     logoURI: TRUSTWALLET_ETH('0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'),
+  },
+  {
+    // Circle's own official Sepolia testnet USDC (faucet.circle.com).
+    // Verified two ways: on-chain symbol()/decimals() confirms USDC / 6
+    // decimals, AND factory.getPair(WETH, this) against our actually
+    // deployed Uniswap V2 router/factory (0xC532a742...) returns a real
+    // pair with non-zero reserves on both sides.
+    address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+    symbol: 'USDC',
+    name: 'USDC',
+    decimals: 6,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/6319/large/USDC.png?1769615602',
+  },
+  {
+    // No official Sepolia USDT had existing WETH liquidity against our
+    // deployed router (checked on-chain via factory.getPair against
+    // several known faucet USDT tokens — none had a pool). Deployed our
+    // own mock and seeded a genuine WETH/tUSDT pair via addLiquidityETH on
+    // the real Uniswap V2 router 2026-08-04 (deploy-sepolia-mock-usdt.ts)
+    // — this is a real AMM pool with real constant-product pricing, not a
+    // decimal-naive mock like Arbitrum Sepolia's fixture. Quote-verified:
+    // 0.001 WETH -> ~906.6 tUSDT via getAmountsOut before wiring in here.
+    address: '0x2D87204F285a897cEe2B3498d6AdD24f27EB4aFD',
+    symbol: 'tUSDT',
+    name: 'Test Tether USD',
+    decimals: 6,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/325/large/Tether.png?1696501661',
   }
 ];
 
@@ -522,6 +571,22 @@ export const ARBITRUM_SEPOLIA_TOKENS: Token[] = [
     name: 'Test USD Coin',
     decimals: 6,
     logoURI: TRUSTWALLET_ETH('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'),
+  },
+  {
+    // Deployed + seeded 2026-08-04 (deploy-arbitrum-sepolia-tusdt.ts) into
+    // the existing MockUniswapRouter, closing the last USDC/USDT gap here.
+    // Note: MockUniswapRouter.sol prices everything at a flat 1e18 (i.e.
+    // "1 raw unit in = 1 raw unit out"), with no awareness of decimals —
+    // pre-existing behavior shared with tUSDC above, not something specific
+    // to this token. That makes quoted amounts here look nonsensical
+    // (e.g. huge/tiny) for anything but very small trade sizes — expected
+    // on this mock fixture, not a real price and not present on any real
+    // router (BSC Testnet, Sepolia, or mainnet all use genuine AMM pools).
+    address: '0x2A2fe46305Fa7a4F72d73b7E18f36FFD7b37d914',
+    symbol: 'tUSDT',
+    name: 'Test Tether USD',
+    decimals: 6,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/325/large/Tether.png?1696501661',
   }
 ];
 

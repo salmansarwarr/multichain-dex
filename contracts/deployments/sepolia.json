@@ -14,5 +14,10 @@
   "feeWalletUpdatedAt": "2026-07-13T17:55:15.932Z",
   "feeWalletUpdateTxHash": "0xdade584b3706f8dac369c4a2a68f199ce66532ebf373e1552108ccaca5ca1fa7",
   "ownerTransferredAt": "2026-07-22T16:12:25.210Z",
-  "ownerTransferTxHash": "0x4118e5e67f81a86ae840b4a822443495ff98d56afe686bdd2d3d441db131b5b2"
+  "ownerTransferTxHash": "0x4118e5e67f81a86ae840b4a822443495ff98d56afe686bdd2d3d441db131b5b2",
+  "mocks": {
+    "tUSDT": "0x2D87204F285a897cEe2B3498d6AdD24f27EB4aFD",
+    "tUSDTNote": "No official Sepolia USDT with existing WETH liquidity found (checked on-chain via factory.getPair against several known faucet USDT tokens). Deployed our own mock and seeded a real WETH/tUSDT pair via addLiquidityETH on the actual Uniswap V2 router — this one is NOT a mock router like Arbitrum Sepolia's, it's the real Sepolia Uniswap deployment.",
+    "tUSDTAddedAt": "2026-08-03T21:31:00.857Z"
+  }
 }
