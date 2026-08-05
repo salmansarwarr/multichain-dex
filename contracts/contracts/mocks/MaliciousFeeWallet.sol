@@ -39,4 +39,15 @@ contract MaliciousFeeWallet {
             );
         }
     }
+
+    /// @notice Test-only generic executor, so tests can drive this contract
+    /// to call arbitrary functions on `target` as itself — e.g. claiming a
+    /// pending fee that accrued to this address while it was feeWallet,
+    /// after feeWallet has since moved on. Not part of the attack surface
+    /// under test; just a way to act "as" this address from a test script.
+    function execute(bytes calldata data) external returns (bytes memory) {
+        (bool ok, bytes memory ret) = address(target).call(data);
+        require(ok, "execute failed");
+        return ret;
+    }
 }

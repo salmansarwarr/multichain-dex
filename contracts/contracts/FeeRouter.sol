@@ -17,12 +17,17 @@ import {IPancakeRouter02} from "./interfaces/IPancakeRouter02.sol";
 /// Custody note: this contract briefly holds user funds within a single
 /// transaction (pull -> skim fee -> approve remainder -> swap), and does
 /// not carry a standing balance in the normal case. The one exception is
-/// `pendingTokenFees`/`pendingEthFees`: if pushing the fee to `feeWallet`
-/// ever fails (broken/reverting feeWallet), the swap still completes for
-/// the user and the fee is held here instead, claimable by `feeWallet` via
-/// `withdrawPendingTokenFees`/`withdrawPendingEthFees` once fixed — see
-/// `_tryTransfer`. This trades a small amount of standing balance for
-/// removing feeWallet-health as a single point of failure for all swaps.
+/// the pending-fee ledger: if pushing the fee to `feeWallet` ever fails
+/// (broken/reverting feeWallet), the swap still completes for the user and
+/// the fee is credited to *whichever address was feeWallet at the time* —
+/// see `SafeERC20.trySafeTransfer`. Pending fees are tracked per-address
+/// (`pendingTokenFeesByWallet`/`pendingEthFeesByWallet`), not against
+/// "the current feeWallet", specifically so that changing `feeWallet` later
+/// can never strand or redirect fees that already accrued to someone else —
+/// each address can only ever claim (via `withdrawPendingTokenFees`/
+/// `withdrawPendingEthFees`, to a recipient of their choosing, e.g. if the
+/// original address is later blacklisted by the token itself) exactly what
+/// accrued to it while it was feeWallet.
 contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -43,12 +48,21 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
     uint256 public feeBps;
 
     /// @notice ERC20 fees that failed to push to `feeWallet` and are
-    /// waiting to be claimed via `withdrawPendingTokenFees`. Keyed by token.
-    mapping(address => uint256) public pendingTokenFees;
+    /// waiting to be claimed. Keyed by [the address that was feeWallet when
+    /// the fee accrued][token] — NOT by the current feeWallet, so a later
+    /// `setFeeWallet` call can't strand or redirect what's already owed.
+    mapping(address => mapping(address => uint256)) public pendingTokenFeesByWallet;
 
-    /// @notice Native BNB fees that failed to push to `feeWallet` and are
-    /// waiting to be claimed via `withdrawPendingEthFees`.
-    uint256 public pendingEthFees;
+    /// @notice Native BNB fees that failed to push, same per-wallet model.
+    mapping(address => uint256) public pendingEthFeesByWallet;
+
+    /// @notice Running total of `pendingTokenFeesByWallet` across every
+    /// address, per token — used so `rescueERC20` can never touch fees
+    /// owed to anyone, past or present feeWallet.
+    mapping(address => uint256) public totalPendingTokenFees;
+
+    /// @notice Same as above, for ETH.
+    uint256 public totalPendingEthFees;
 
     event SwapExecuted(
         address indexed user,
@@ -60,7 +74,7 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
     event FeeUpdated(uint256 oldFeeBps, uint256 newFeeBps);
     event FeeWalletUpdated(address oldWallet, address newWallet);
     event FeeWalletTransferFailed(address indexed feeWallet, uint256 amount);
-    event FeesWithdrawn(address indexed feeWallet, address indexed token, uint256 amount);
+    event FeesWithdrawn(address indexed claimant, address indexed token, address recipient, uint256 amount);
     event FundsRescued(address indexed token, address indexed to, uint256 amount);
 
     error ZeroAmount();
@@ -69,7 +83,6 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
     error DeadlineExpired();
     error EmptyPath();
     error EthTransferFailed();
-    error NotFeeWallet();
     error NothingToWithdraw();
     error InsufficientRescueBalance();
 
@@ -120,39 +133,44 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
         _unpause();
     }
 
-    /// @notice Claim any ERC20 fees that failed to push automatically
-    /// during a swap (see `_tryTransfer`). Callable only by the current
-    /// `feeWallet` — if `feeWallet` changes, only the new address can claim
-    /// going forward, matching who the fee was actually owed to at the
-    /// time it accrued being irrelevant once feeWallet itself has moved.
-    function withdrawPendingTokenFees(address token) external nonReentrant {
-        if (msg.sender != feeWallet) revert NotFeeWallet();
-        uint256 amount = pendingTokenFees[token];
+    /// @notice Claim ERC20 fees that failed to push automatically during a
+    /// swap while `msg.sender` was feeWallet (see `SafeERC20.trySafeTransfer`) — works
+    /// regardless of whether `msg.sender` is still the *current* feeWallet,
+    /// so a `setFeeWallet` call can never strand what was already accrued.
+    /// `recipient` lets a claimant redirect the payout (e.g. the address
+    /// that accrued the fee has since been blacklisted by the token itself).
+    function withdrawPendingTokenFees(address token, address recipient) external nonReentrant {
+        if (recipient == address(0)) revert ZeroAddress();
+        uint256 amount = pendingTokenFeesByWallet[msg.sender][token];
         if (amount == 0) revert NothingToWithdraw();
-        pendingTokenFees[token] = 0;
-        IERC20(token).safeTransfer(feeWallet, amount);
-        emit FeesWithdrawn(feeWallet, token, amount);
+        pendingTokenFeesByWallet[msg.sender][token] = 0;
+        totalPendingTokenFees[token] -= amount;
+        IERC20(token).safeTransfer(recipient, amount);
+        emit FeesWithdrawn(msg.sender, token, recipient, amount);
     }
 
     /// @notice Same as above, for native BNB fees that failed to push.
-    function withdrawPendingEthFees() external nonReentrant {
-        if (msg.sender != feeWallet) revert NotFeeWallet();
-        uint256 amount = pendingEthFees;
+    function withdrawPendingEthFees(address payable recipient) external nonReentrant {
+        if (recipient == address(0)) revert ZeroAddress();
+        uint256 amount = pendingEthFeesByWallet[msg.sender];
         if (amount == 0) revert NothingToWithdraw();
-        pendingEthFees = 0;
-        // feeWallet is owner-gated (setFeeWallet/onlyOwner), never attacker-supplied.
+        pendingEthFeesByWallet[msg.sender] = 0;
+        totalPendingEthFees -= amount;
+        // recipient is chosen by msg.sender for their own accrued balance,
+        // not attacker-supplied in any way that affects other users' funds.
         // slither-disable-next-line arbitrary-send-eth
-        (bool sent, ) = feeWallet.call{value: amount}("");
+        (bool sent, ) = recipient.call{value: amount}("");
         if (!sent) revert EthTransferFailed();
-        emit FeesWithdrawn(feeWallet, address(0), amount);
+        emit FeesWithdrawn(msg.sender, address(0), recipient, amount);
     }
 
     /// @notice Recover ERC20 tokens sent to this contract outside the
     /// normal swap flow (direct transfer, airdrop, etc). Cannot touch
-    /// anything owed to feeWallet as a pending fee — only the excess.
+    /// anything owed to anyone (past or present feeWallet) as a pending
+    /// fee — only the excess.
     function rescueERC20(address token, uint256 amount, address to) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
-        uint256 available = IERC20(token).balanceOf(address(this)) - pendingTokenFees[token];
+        uint256 available = IERC20(token).balanceOf(address(this)) - totalPendingTokenFees[token];
         if (amount > available) revert InsufficientRescueBalance();
         IERC20(token).safeTransfer(to, amount);
         emit FundsRescued(token, to, amount);
@@ -161,7 +179,7 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
     /// @notice Same as above, for native BNB.
     function rescueETH(uint256 amount, address to) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
-        uint256 available = address(this).balance - pendingEthFees;
+        uint256 available = address(this).balance - totalPendingEthFees;
         if (amount > available) revert InsufficientRescueBalance();
         // slither-disable-next-line arbitrary-send-eth
         (bool sent, ) = to.call{value: amount}("");
@@ -176,10 +194,20 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
     /// @notice Swap an exact amount of `path[0]` for `path[last]`, taking a
     /// fee off `amountIn` before swapping the remainder. Fee is computed off
     /// the amount *actually received* (balance-delta), not the caller-supplied
-    /// `amountIn` — keeps the fee correct even if `path[0]` itself takes a
+    /// `amountIn` — keeps the *fee* correct even if `path[0]` itself takes a
     /// transfer cut (common on BSC's many tax/reflection tokens).
     /// @dev Caller must have approved this contract for at least `amountIn`
     /// of `path[0]` beforehand.
+    /// @dev WARNING: this does NOT mean the swap itself supports a
+    /// fee-on-transfer `path[0]`. `pancakeRouter.swapExactTokensForTokens`
+    /// pulls exactly `amountAfterFee` from this contract and expects the
+    /// pair to receive that full amount — a taxed `path[0]` means the pair
+    /// receives less than expected and the swap reverts (safely — no funds
+    /// lost, the whole tx unwinds). Use
+    /// `swapExactTokensForTokensWithFeeSupportingFeeOnTransferTokens`
+    /// instead for a `path[0]` with `isFeeOnTransfer` set (see
+    /// `frontend/src/data/tokens.ts`) — the frontend already does this by
+    /// checking both `tokenIn.isFeeOnTransfer` and `tokenOut.isFeeOnTransfer`.
     function swapExactTokensForTokensWithFee(
         uint256 amountIn,
         uint256 amountOutMin,
@@ -259,8 +287,15 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
             // feeWallet is owner-gated (setFeeWallet/onlyOwner), never attacker-supplied.
             // slither-disable-next-line arbitrary-send-eth
             (bool sent, ) = feeWallet.call{value: feeAmount}("");
+            // Reached only when the call above already failed — its entire
+            // execution (including any reentrant attempt) reverted, so
+            // there's nothing left for a "reentering" callee to have done;
+            // the state written here can't be observed mid-flight. Slither
+            // still flags this pattern generically as reentrancy-benign —
+            // reviewed and accepted, see the security review doc.
             if (!sent) {
-                pendingEthFees += feeAmount;
+                pendingEthFeesByWallet[feeWallet] += feeAmount;
+                totalPendingEthFees += feeAmount;
                 emit FeeWalletTransferFailed(feeWallet, feeAmount);
             }
         }
@@ -299,8 +334,15 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
             // feeWallet is owner-gated (setFeeWallet/onlyOwner), never attacker-supplied.
             // slither-disable-next-line arbitrary-send-eth
             (bool sent, ) = feeWallet.call{value: feeAmount}("");
+            // Reached only when the call above already failed — its entire
+            // execution (including any reentrant attempt) reverted, so
+            // there's nothing left for a "reentering" callee to have done;
+            // the state written here can't be observed mid-flight. Slither
+            // still flags this pattern generically as reentrancy-benign —
+            // reviewed and accepted, see the security review doc.
             if (!sent) {
-                pendingEthFees += feeAmount;
+                pendingEthFeesByWallet[feeWallet] += feeAmount;
+                totalPendingEthFees += feeAmount;
                 emit FeeWalletTransferFailed(feeWallet, feeAmount);
             }
         }
@@ -327,6 +369,13 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
     /// `path[0]` — a rebase landing between the two `balanceOf` reads below
     /// could underflow the delta and revert, or skew the measured amount.
     /// Only standard ERC20 and fee-on-transfer ERC20 tokens are supported.
+    /// @dev If `path[0]` is itself fee-on-transfer, the fee push below to
+    /// `feeWallet` is *also* taxed by the token on that transfer, so
+    /// feeWallet receives `feeAmount` minus the token's own cut — not a bug
+    /// introduced here, this is the same token tax applying twice to two
+    /// separate transfers of the same token, and has been true (and
+    /// covered by the "Fee-on-transfer token handling" tests) since this
+    /// function's original version.
     function _pullAndSkimFee(
         uint256 amountIn,
         address[] calldata path,
@@ -360,8 +409,17 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
         (feeAmount, amountAfterFee) = _computeFee(received);
 
         if (feeAmount > 0) {
-            if (!_tryTransfer(IERC20(tokenIn), feeWallet, feeAmount)) {
-                pendingTokenFees[tokenIn] += feeAmount;
+            // trySafeTransfer (not the custom hand-rolled attempt this used
+            // to be) bounds the return-data copy from the token's transfer()
+            // call to 32 bytes via assembly — an arbitrary/malicious token
+            // can't force this to copy an unbounded amount of return data
+            // into memory as a gas-griefing vector. Non-reverting on
+            // failure, so a broken/malicious feeWallet degrades to "fee
+            // held here, claimable later" instead of blocking the user's
+            // swap outright (see contract-level custody note).
+            if (!IERC20(tokenIn).trySafeTransfer(feeWallet, feeAmount)) {
+                pendingTokenFeesByWallet[feeWallet][tokenIn] += feeAmount;
+                totalPendingTokenFees[tokenIn] += feeAmount;
                 emit FeeWalletTransferFailed(feeWallet, feeAmount);
             }
         }
@@ -370,19 +428,6 @@ contract FeeRouter is Ownable, Pausable, ReentrancyGuard {
     function _computeFee(uint256 amountIn) internal view returns (uint256 feeAmount, uint256 amountAfterFee) {
         feeAmount = (amountIn * feeBps) / BPS_DENOMINATOR;
         amountAfterFee = amountIn - feeAmount;
-    }
-
-    /// @dev Non-reverting transfer attempt, so a broken/malicious feeWallet
-    /// degrades to "fee held here, claimable later" instead of blocking the
-    /// user's swap outright (see contract-level custody note). Mirrors
-    /// SafeERC20's own success check (call succeeded AND return data is
-    /// either empty or decodes to true) rather than using SafeERC20.safeTransfer
-    /// directly, since that reverts on failure and can't be caught this way.
-    function _tryTransfer(IERC20 token, address to, uint256 amount) private returns (bool success) {
-        (bool callSuccess, bytes memory data) = address(token).call(
-            abi.encodeCall(IERC20.transfer, (to, amount))
-        );
-        success = callSuccess && (data.length == 0 || abi.decode(data, (bool)));
     }
 
     /// @dev Only meaningful if this contract is ever sent native BNB

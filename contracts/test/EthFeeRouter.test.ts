@@ -334,7 +334,7 @@ describe("EthFeeRouter", function () {
   });
 
   describe("feeWallet DoS fix — swap succeeds even when feeWallet can't receive", function () {
-    it("credits pendingEthFees instead of blocking the swap when feeWallet reverts", async function () {
+    it("credits the pending-fee ledger instead of blocking the swap when feeWallet reverts", async function () {
       const { ethFeeRouter, tokenOut, owner, user } = await loadFixture(deployFixture);
 
       const MaliciousFeeWallet = await ethers.getContractFactory("MaliciousFeeWallet");
@@ -362,8 +362,51 @@ describe("EthFeeRouter", function () {
       await expect(tx).to.emit(ethFeeRouter, "SwapExecuted");
 
       expect(await attacker.attacked()).to.equal(false);
-      expect(await ethFeeRouter.pendingEthFees()).to.equal(fee);
+      expect(await ethFeeRouter.pendingEthFeesByWallet(await attacker.getAddress())).to.equal(fee);
+      expect(await ethFeeRouter.totalPendingEthFees()).to.equal(fee);
       expect(await tokenOut.balanceOf(user.address)).to.equal(afterFee);
+    });
+
+    it("lets the address a fee accrued to withdraw it later even after feeWallet changes, redirecting to a chosen recipient", async function () {
+      const { ethFeeRouter, tokenOut, owner, user, other } = await loadFixture(deployFixture);
+
+      const MaliciousFeeWallet = await ethers.getContractFactory("MaliciousFeeWallet");
+      const attacker = await MaliciousFeeWallet.deploy(await ethFeeRouter.getAddress());
+      await ethFeeRouter.connect(owner).setFeeWallet(await attacker.getAddress());
+      await attacker.setAttackPath([await ethFeeRouter.uniswapRouter(), await tokenOut.getAddress()]);
+
+      const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+      const amountIn = ethers.parseEther("1");
+      const { fee } = computeFee(amountIn);
+
+      await ethFeeRouter
+        .connect(user)
+        .swapExactETHForTokensWithFee(
+          0,
+          [await ethFeeRouter.uniswapRouter(), await tokenOut.getAddress()],
+          user.address,
+          deadline,
+          { value: amountIn }
+        );
+
+      // Owner moves feeWallet elsewhere — the new feeWallet must not
+      // inherit fees that accrued to the old one.
+      await ethFeeRouter.connect(owner).setFeeWallet(other.address);
+      expect(await ethFeeRouter.pendingEthFeesByWallet(other.address)).to.equal(0);
+      await expect(
+        ethFeeRouter.connect(other).withdrawPendingEthFees(other.address)
+      ).to.be.revertedWithCustomError(ethFeeRouter, "NothingToWithdraw");
+
+      // The old feeWallet can still claim what accrued to it, redirected
+      // to any recipient (the blacklist-redirect fix).
+      const balBefore = await ethers.provider.getBalance(other.address);
+      const iface = ethFeeRouter.interface;
+      await attacker.execute(iface.encodeFunctionData("withdrawPendingEthFees", [other.address]));
+      const balAfter = await ethers.provider.getBalance(other.address);
+
+      expect(balAfter - balBefore).to.equal(fee);
+      expect(await ethFeeRouter.pendingEthFeesByWallet(await attacker.getAddress())).to.equal(0);
+      expect(await ethFeeRouter.totalPendingEthFees()).to.equal(0);
     });
   });
 

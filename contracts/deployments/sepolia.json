@@ -2,9 +2,9 @@
   "network": "sepolia",
   "chainId": 11155111,
   "contract": "EthFeeRouter",
-  "address": "0x5d02b756d416231fe71188e2F73C54446140bb56",
-  "deployTxHash": "0x5b9c6367b5d06fb84cc7235d7c93157cbf37633a6455e60560aac92694a29ac3",
-  "deployedAt": "2026-08-04T11:44:01.838Z",
+  "address": "0xF27443aAdBaE8611Db6d4164ac4560eF73fa6b64",
+  "deployTxHash": "0x9a65b61dd0f1a7c7747bb903a148f22726c2b0efa0d488f69eee06199ff69d27",
+  "deployedAt": "2026-08-05T10:47:26.893Z",
   "constructorArgs": {
     "uniswapRouter": "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008",
     "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
@@ -31,6 +31,24 @@
       "ownerTransferTxHash": "0x4118e5e67f81a86ae840b4a822443495ff98d56afe686bdd2d3d441db131b5b2",
       "replacedAt": "2026-08-04T11:44:01.838Z",
       "replacedReason": "2026-08-04 security-review fixes (feeWallet DoS, rescue functions, to!=0 check)"
+    },
+    {
+      "network": "sepolia",
+      "chainId": 11155111,
+      "contract": "EthFeeRouter",
+      "address": "0x5d02b756d416231fe71188e2F73C54446140bb56",
+      "deployTxHash": "0x5b9c6367b5d06fb84cc7235d7c93157cbf37633a6455e60560aac92694a29ac3",
+      "deployedAt": "2026-08-04T11:44:01.838Z",
+      "constructorArgs": {
+        "uniswapRouter": "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008",
+        "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+        "feeBps": 15,
+        "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+      },
+      "ownerTransferredAt": "2026-08-04T12:29:15.638Z",
+      "ownerTransferTxHash": "0x0a0d184033321ad443e295bb548ea31622561080b931ea5b3795d7d36a031a20",
+      "replacedAt": "2026-08-05T10:47:26.893Z",
+      "replacedReason": "2026-08-04 security-review fixes (feeWallet DoS, rescue functions, to!=0 check)"
     }
   ],
   "mocks": {
@@ -38,6 +56,6 @@
     "tUSDTNote": "No official Sepolia USDT with existing WETH liquidity found (checked on-chain via factory.getPair against several known faucet USDT tokens). Deployed our own mock and seeded a real WETH/tUSDT pair via addLiquidityETH on the actual Uniswap V2 router — this one is NOT a mock router like Arbitrum Sepolia's, it's the real Sepolia Uniswap deployment.",
     "tUSDTAddedAt": "2026-08-03T21:31:00.857Z"
   },
-  "ownerTransferredAt": "2026-08-04T12:29:15.638Z",
-  "ownerTransferTxHash": "0x0a0d184033321ad443e295bb548ea31622561080b931ea5b3795d7d36a031a20"
+  "ownerTransferredAt": "2026-08-05T10:52:27.726Z",
+  "ownerTransferTxHash": "0xceef8d055c35a11643598c9946b92b75769417274ae9a1c39c8dd0d9bdeeb452"
 }

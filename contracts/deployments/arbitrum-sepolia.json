@@ -2,9 +2,9 @@
   "network": "arbitrumSepolia",
   "chainId": 421614,
   "contract": "EthFeeRouter",
-  "address": "0x43aB86B6461297BF95Fbc7bd84Ab61d98F13969A",
-  "deployTxHash": "0x8d03e02040a70e3fb74acc23b71cd39857c8d8eec5cb6996b3a7152ddc7e91bd",
-  "deployedAt": "2026-08-04T11:44:21.637Z",
+  "address": "0x327d2Dc9977eD987E2EB8658EfE823d71C65e614",
+  "deployTxHash": "0xd6c5a79407c731788190c2589188b0996c0f845511d70ee41322a7d56a3a20a4",
+  "deployedAt": "2026-08-05T10:47:50.713Z",
   "constructorArgs": {
     "uniswapRouter": "0x542e6c05156D8946730029589E5B785Cb40Cf1Ba",
     "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
@@ -37,8 +37,26 @@
       "ownerTransferTxHash": "0x1c3df3cf6f0667cf25b45ea3d17f7e647770301e8543fc5b4adc8c21e9e3e360",
       "replacedAt": "2026-08-04T11:44:21.637Z",
       "replacedReason": "2026-08-04 security-review fixes (feeWallet DoS, rescue functions, to!=0 check)"
+    },
+    {
+      "network": "arbitrumSepolia",
+      "chainId": 421614,
+      "contract": "EthFeeRouter",
+      "address": "0x43aB86B6461297BF95Fbc7bd84Ab61d98F13969A",
+      "deployTxHash": "0x8d03e02040a70e3fb74acc23b71cd39857c8d8eec5cb6996b3a7152ddc7e91bd",
+      "deployedAt": "2026-08-04T11:44:21.637Z",
+      "constructorArgs": {
+        "uniswapRouter": "0x542e6c05156D8946730029589E5B785Cb40Cf1Ba",
+        "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+        "feeBps": 15,
+        "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+      },
+      "ownerTransferredAt": "2026-08-04T12:42:15.076Z",
+      "ownerTransferTxHash": "0x8a34ece273d32007d7b192ceccefd1b95dd3df1ecd8a2635b17284e5c9e3d3a2",
+      "replacedAt": "2026-08-05T10:47:50.713Z",
+      "replacedReason": "2026-08-04 security-review fixes (feeWallet DoS, rescue functions, to!=0 check)"
     }
   ],
-  "ownerTransferredAt": "2026-08-04T12:42:15.076Z",
-  "ownerTransferTxHash": "0x8a34ece273d32007d7b192ceccefd1b95dd3df1ecd8a2635b17284e5c9e3d3a2"
+  "ownerTransferredAt": "2026-08-05T10:53:23.650Z",
+  "ownerTransferTxHash": "0xc6a5e2ec1477232ceab2f0acefb8f1976f9b218036fb9432fa34e986ed01cb9c"
 }

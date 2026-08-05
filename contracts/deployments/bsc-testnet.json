@@ -2,9 +2,9 @@
   "network": "bscTestnet",
   "chainId": 97,
   "contract": "FeeRouter",
-  "address": "0xBbD4Ff24f2c28e6dAe5f083eb0C98EF65c2fd9e9",
-  "deployTxHash": "0x2a85ed7e91050166a21dd2e195a30f45c01e67369aa2515589f64f869f914191",
-  "deployedAt": "2026-08-04T11:42:53.206Z",
+  "address": "0x6D303DCA98459736c00FfF0507ddA414CbBF0792",
+  "deployTxHash": "0x1c5090eebaafb8f1ffb17e6b469d36d5c75132e91ccee16bf99285ee176b75fa",
+  "deployedAt": "2026-08-05T10:46:07.254Z",
   "constructorArgs": {
     "pancakeRouter": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1",
     "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
@@ -31,8 +31,26 @@
       "ownerTransferTxHash": "0x31ab80d0126b6ccc6d6762aac68b76530c16fd0278e3bba18f0c8c8c2598e21b",
       "replacedAt": "2026-08-04T11:42:53.206Z",
       "replacedReason": "2026-08-04 security-review fixes (feeWallet DoS, rescue functions, to!=0 check)"
+    },
+    {
+      "network": "bscTestnet",
+      "chainId": 97,
+      "contract": "FeeRouter",
+      "address": "0xBbD4Ff24f2c28e6dAe5f083eb0C98EF65c2fd9e9",
+      "deployTxHash": "0x2a85ed7e91050166a21dd2e195a30f45c01e67369aa2515589f64f869f914191",
+      "deployedAt": "2026-08-04T11:42:53.206Z",
+      "constructorArgs": {
+        "pancakeRouter": "0xD99D1c33F9fC3444f8101754aBC46c52416550D1",
+        "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+        "feeBps": 15,
+        "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+      },
+      "ownerTransferredAt": "2026-08-04T12:28:01.693Z",
+      "ownerTransferTxHash": "0xd3421fb23c042800f25bd454bd471016455ab2af28dc518ab98bd60379b9e061",
+      "replacedAt": "2026-08-05T10:46:07.254Z",
+      "replacedReason": "2026-08-04 security-review fixes (feeWallet DoS, rescue functions, to!=0 check)"
     }
   ],
-  "ownerTransferredAt": "2026-08-04T12:28:01.693Z",
-  "ownerTransferTxHash": "0xd3421fb23c042800f25bd454bd471016455ab2af28dc518ab98bd60379b9e061"
+  "ownerTransferredAt": "2026-08-05T10:51:10.246Z",
+  "ownerTransferTxHash": "0xfdb34cebb428ac25c652c70685d1cd4b146da48385ba4c18ce41bd0a8e61844b"
 }
