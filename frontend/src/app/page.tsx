@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { Header } from '@/components/layout/Header';
 import { SwapCard } from '@/components/ui/SwapCard';
 import { WalletStatus } from '@/components/ui/WalletStatus';
@@ -158,6 +159,16 @@ export default function Home() {
         )}
         
         <WalletStatus />
+
+        <div className="mt-10 mb-4 flex flex-col items-center gap-2">
+          <Image
+            src="/auditsecurity.png"
+            alt="Security code audit — static and dynamic analysis"
+            width={531}
+            height={354}
+            className="w-full max-w-[280px] h-auto rounded-xl border border-primary/20 shadow-lg shadow-primary/10"
+          />
+        </div>
       </div>
 
       {/* Decorative background blobs */}

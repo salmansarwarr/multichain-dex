@@ -5,8 +5,6 @@ node_modules/
 # Env files - NEVER commit real secrets
 .env
 **/.env
-!.env.example
-!**/.env.example
 
 # Hardhat
 contracts/artifacts/
