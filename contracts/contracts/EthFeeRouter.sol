@@ -41,6 +41,14 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     uint256 public constant BPS_DENOMINATOR = 10_000;
     uint256 public constant MAX_FEE_BPS = 100; // 1% hard cap
 
+    /// @notice Gas stipend for the feeWallet native-token push in the ETH
+    /// swap paths. Bounds a malicious or broken feeWallet (owner-settable) to
+    /// a fixed worst case instead of letting it consume the whole tx's gas —
+    /// enough for a plain receive() or a simple multisig/vault fallback; a
+    /// wallet that needs more than this degrades to the pending-fee ledger
+    /// via the existing `!sent` fallback rather than reverting the swap.
+    uint256 private constant FEE_WALLET_CALL_GAS_LIMIT = 30_000;
+
     IUniswapV2Router02 public immutable uniswapRouter;
 
     address public feeWallet;
@@ -105,6 +113,13 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     // Admin
     // ---------------------------------------------------------------------
 
+    /// @dev A fee change can land between a user signing a swap and it being
+    /// mined, so the user's realized fee can differ from what they saw in
+    /// the frontend at signing time — reviewed and accepted: the owner is a
+    /// trusted role (same trust boundary as pause()/rescue*()), the change
+    /// is capped at 1% regardless, and is visible on-chain via `FeeUpdated`
+    /// before it's mined. No per-call `maxFeeBps` guard or timelock by
+    /// design choice.
     function setFeeBps(uint256 newFeeBps) external onlyOwner {
         if (newFeeBps > MAX_FEE_BPS) revert FeeExceedsCap(newFeeBps, MAX_FEE_BPS);
         emit FeeUpdated(feeBps, newFeeBps);
@@ -117,6 +132,15 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
         feeWallet = newFeeWallet;
     }
 
+    /// @dev No auto-expiry or third-party override on the pause: it's meant
+    /// to be a real, unbounded circuit breaker (same model as Uniswap/
+    /// PancakeSwap's own emergency mechanisms), not a soft delay. A
+    /// time-boxed auto-unpause was considered and rejected — it would let
+    /// whoever compromised the owner key just wait out the timer and
+    /// re-exploit, trading a liveness risk for a recurring security one.
+    /// `withdrawPendingTokenFees`/`withdrawPendingEthFees` are intentionally
+    /// NOT gated by `whenNotPaused`, so a pause can never trap funds already
+    /// owed to someone. Reviewed and accepted; owner is a trusted role.
     function pause() external onlyOwner {
         _pause();
     }
@@ -132,6 +156,7 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     /// `recipient` lets a claimant redirect the payout (e.g. the address
     /// that accrued the fee has since been blacklisted by the token itself).
     function withdrawPendingTokenFees(address token, address recipient) external nonReentrant {
+        if (token == address(0)) revert ZeroAddress();
         if (recipient == address(0)) revert ZeroAddress();
         uint256 amount = pendingTokenFeesByWallet[msg.sender][token];
         if (amount == 0) revert NothingToWithdraw();
@@ -161,7 +186,8 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     /// anything owed to anyone (past or present feeWallet) as a pending
     /// fee — only the excess.
     function rescueERC20(address token, uint256 amount, address to) external onlyOwner nonReentrant {
-        if (to == address(0)) revert ZeroAddress();
+        if (token == address(0) || to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
         uint256 available = IERC20(token).balanceOf(address(this)) - totalPendingTokenFees[token];
         if (amount > available) revert InsufficientRescueBalance();
         IERC20(token).safeTransfer(to, amount);
@@ -171,6 +197,7 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     /// @notice Same as above, for native ETH.
     function rescueETH(uint256 amount, address to) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
         uint256 available = address(this).balance - totalPendingEthFees;
         if (amount > available) revert InsufficientRescueBalance();
         // slither-disable-next-line arbitrary-send-eth
@@ -262,6 +289,11 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
         if (to == address(0)) revert ZeroAddress();
         if (msg.value == 0) revert ZeroAmount();
         if (path.length < 2) revert EmptyPath();
+        if (path[0] == address(0) || path[path.length - 1] == address(0)) revert ZeroAddress();
+        // Deadline vs. block.timestamp is the same pattern Uniswap/PancakeSwap
+        // routers use themselves; a miner's few-second timestamp leeway can't
+        // extend a stale, already-agreed-price swap in any way that matters —
+        // reviewed and accepted, not swapped for a block-number check.
         if (block.timestamp > deadline) revert DeadlineExpired();
 
         address tokenOut = path[path.length - 1];
@@ -269,8 +301,12 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
 
         if (feeAmount > 0) {
             // feeWallet is owner-gated (setFeeWallet/onlyOwner), never attacker-supplied.
+            // Gas-capped so a feeWallet with an expensive/looping fallback can't
+            // consume the whole tx's gas and force the swap to revert — it just
+            // falls through to the pending-fee ledger below, same as any other
+            // failed push.
             // slither-disable-next-line arbitrary-send-eth
-            (bool sent, ) = feeWallet.call{value: feeAmount}("");
+            (bool sent, ) = feeWallet.call{value: feeAmount, gas: FEE_WALLET_CALL_GAS_LIMIT}("");
             // Reached only when the call above already failed — its entire
             // execution (including any reentrant attempt) reverted, so
             // there's nothing left for a "reentering" callee to have done;
@@ -298,6 +334,11 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
         if (to == address(0)) revert ZeroAddress();
         if (msg.value == 0) revert ZeroAmount();
         if (path.length < 2) revert EmptyPath();
+        if (path[0] == address(0) || path[path.length - 1] == address(0)) revert ZeroAddress();
+        // Deadline vs. block.timestamp is the same pattern Uniswap/PancakeSwap
+        // routers use themselves; a miner's few-second timestamp leeway can't
+        // extend a stale, already-agreed-price swap in any way that matters —
+        // reviewed and accepted, not swapped for a block-number check.
         if (block.timestamp > deadline) revert DeadlineExpired();
 
         address tokenOut = path[path.length - 1];
@@ -305,8 +346,12 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
 
         if (feeAmount > 0) {
             // feeWallet is owner-gated (setFeeWallet/onlyOwner), never attacker-supplied.
+            // Gas-capped so a feeWallet with an expensive/looping fallback can't
+            // consume the whole tx's gas and force the swap to revert — it just
+            // falls through to the pending-fee ledger below, same as any other
+            // failed push.
             // slither-disable-next-line arbitrary-send-eth
-            (bool sent, ) = feeWallet.call{value: feeAmount}("");
+            (bool sent, ) = feeWallet.call{value: feeAmount, gas: FEE_WALLET_CALL_GAS_LIMIT}("");
             // Reached only when the call above already failed — its entire
             // execution (including any reentrant attempt) reverted, so
             // there's nothing left for a "reentering" callee to have done;
@@ -342,6 +387,15 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     /// `path[0]` — a rebase landing between the two `balanceOf` reads below
     /// could underflow the delta and revert, or skew the measured amount.
     /// Only standard ERC20 and fee-on-transfer ERC20 tokens are supported.
+    /// @dev `path[0]` is caller-supplied and can be any contract, including
+    /// one that lies about its own `balanceOf`/`transferFrom` — but that
+    /// only lets a caller misreport accounting for tokens *it* controls
+    /// within its *own* call. `received`, `feeAmount`, and the router
+    /// approval are all scoped to this single transaction and this single
+    /// token's self-consistent (if fabricated) view of its own balances;
+    /// there's no shared state here a malicious token can use to move real
+    /// value out of what other users hold in other tokens. Reviewed and
+    /// accepted — not a cross-user vulnerability.
     /// @dev If `path[0]` is itself fee-on-transfer, the fee push below to
     /// `feeWallet` is *also* taxed by the token on that transfer, so
     /// feeWallet receives `feeAmount` minus the token's own cut — not a bug
@@ -365,6 +419,9 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     {
         if (amountIn == 0) revert ZeroAmount();
         if (path.length < 2) revert EmptyPath();
+        if (path[0] == address(0) || path[path.length - 1] == address(0)) revert ZeroAddress();
+        // See swapExactETHForTokensWithFee: deadline-vs-block.timestamp is the
+        // standard router pattern, reviewed and accepted.
         if (block.timestamp > deadline) revert DeadlineExpired();
 
         tokenIn = path[0];

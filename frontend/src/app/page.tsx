@@ -160,12 +160,19 @@ export default function Home() {
         
         <WalletStatus />
 
-        <div className="mt-10 mb-4 flex flex-col items-center gap-2">
+        <div className="mt-10 mb-4 flex flex-wrap items-start justify-center gap-4">
           <Image
             src="/auditsecurity.png"
             alt="Security code audit — static and dynamic analysis"
             width={531}
             height={354}
+            className="w-full max-w-[280px] h-auto rounded-xl border border-primary/20 shadow-lg shadow-primary/10"
+          />
+          <Image
+            src="/auditAI.jpg"
+            alt="AI in internal audit — opportunities and risks explained"
+            width={686}
+            height={386}
             className="w-full max-w-[280px] h-auto rounded-xl border border-primary/20 shadow-lg shadow-primary/10"
           />
         </div>
