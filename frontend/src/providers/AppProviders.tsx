@@ -14,19 +14,23 @@ const queryClient = new QueryClient();
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
-    <ChainProvider>
-      <WagmiProvider config={wagmiConfig}>
-        <QueryClientProvider client={queryClient}>
-          <RainbowKitProvider theme={darkTheme({
-            accentColor: 'hsl(255, 80%, 60%)',
-            accentColorForeground: 'white',
-            borderRadius: 'large',
-          })}>
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <RainbowKitProvider theme={darkTheme({
+          accentColor: 'hsl(255, 80%, 60%)',
+          accentColorForeground: 'white',
+          borderRadius: 'large',
+        })}>
+          {/* ChainProvider needs to read the wallet's connected chain (to
+              follow a network switch made directly in the wallet, not just
+              via this app's own tab buttons), so it has to sit inside
+              WagmiProvider, not outside it. */}
+          <ChainProvider>
             {children}
-          </RainbowKitProvider>
-        </QueryClientProvider>
-      </WagmiProvider>
-    </ChainProvider>
+          </ChainProvider>
+        </RainbowKitProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }
 
