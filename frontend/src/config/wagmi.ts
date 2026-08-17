@@ -7,6 +7,7 @@ import {
   okxWallet,
   injectedWallet,
 } from '@rainbow-me/rainbowkit/wallets';
+import { metaMaskWalletConnectOnly } from './metaMaskWalletConnectOnly';
 import { customBscTestnet, customBsc, customSepolia, customMainnet, customArbitrumSepolia, customArbitrumOne } from './chains';
 import { createConfig, http } from 'wagmi';
 
@@ -22,21 +23,23 @@ const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJ
 const siteOrigin =
   typeof window !== 'undefined' ? window.location.origin : 'https://alphaterracoin.com';
 
-// metaMaskWallet (RainbowKit's dedicated MetaMask connector) is deliberately
-// left out — it routes through MetaMask's own legacy SDK relay
+// RainbowKit's bundled metaMaskWallet is deliberately NOT used — on mobile
+// it unconditionally routes through MetaMask's own legacy SDK relay
 // (metamask-sdk.api.cx.metamask.io), which drops its WebSocket connection
-// when the mobile browser tab is backgrounded during the app-switch to
-// MetaMask, so returning to the tab after switching networks never
-// delivers the update. MetaMask mobile is still fully reachable via
-// walletConnectWallet below (standard WalletConnect relay, confirmed
-// reliable across the same background/foreground cycle) and via
-// injectedWallet when the site is opened inside MetaMask's own in-app
-// browser (no relay involved at all in that case).
+// when the browser tab is backgrounded during the app-switch to MetaMask,
+// so returning to the tab after switching networks never delivers the
+// update. metaMaskWalletConnectOnly (./metaMaskWalletConnectOnly.ts) is a
+// same-branded replacement: connects directly when MetaMask's own injected
+// provider is present (its in-app browser, or the desktop extension — no
+// relay involved either way), and falls back to standard WalletConnect
+// otherwise — the same relay walletConnectWallet uses for every other
+// wallet, confirmed reliable across the same background/foreground cycle.
 const connectors = connectorsForWallets(
   [
     {
       groupName: 'Recommended',
       wallets: [
+        metaMaskWalletConnectOnly,
         walletConnectWallet,
         trustWallet,
         binanceWallet,
