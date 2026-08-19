@@ -71,6 +71,30 @@ async function redirectToWalletApp(connector: RainbowKitConnector) {
   };
   provider.once?.('display_uri', (uri) => {
     const deepLink = getUri(uri);
+
+    // @walletconnect/sign-client auto-redirects back to whichever app link is
+    // stashed under this well-known localStorage key for every *subsequent*
+    // request on the session (approve, swap, switch network, ...) — see
+    // `getDeepLink`/`handleDeeplinkRedirect` in its source. RainbowKit's own
+    // modal sets this at connect time; without it, only this first pairing
+    // redirect ever happens and every later signature request just sits
+    // there with nothing bringing the wallet app back to the foreground.
+    // Only wallets whose getUri wraps the pairing uri in a real `<href>/wc?
+    // uri=...` app link have a stable href worth remembering this way — a
+    // couple of Android deep links (OKX, Binance) hand back the bare `wc:`
+    // uri itself, which isn't reusable across requests, so those are left
+    // alone (same as before this change).
+    const wcSuffix = '/wc?uri=';
+    if (deepLink.includes(wcSuffix)) {
+      window.localStorage.setItem(
+        'WALLETCONNECT_DEEPLINK_CHOICE',
+        JSON.stringify({
+          href: deepLink.slice(0, deepLink.indexOf(wcSuffix)),
+          name: connector.rkDetails?.name ?? connector.name,
+        }),
+      );
+    }
+
     if (deepLink.startsWith('http')) {
       const link = document.createElement('a');
       link.href = deepLink;
