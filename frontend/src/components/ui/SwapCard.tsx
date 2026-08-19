@@ -6,6 +6,7 @@ import { formatUnits, parseUnits } from "viem";
 
 import { useChainContext } from "@/context/ChainContext";
 import { useWalletModal } from "@/context/WalletModalContext";
+import { useWalletDeepLink } from "@/hooks/useWalletDeepLink";
 import {
     BSC_TESTNET_TOKENS,
     SEPOLIA_TOKENS,
@@ -35,6 +36,7 @@ export function SwapCard() {
     } = useAccount();
     const { switchChain } = useSwitchChain();
     const { open: openWalletModal } = useWalletModal();
+    const { wallet: pendingWallet, open: openWalletApp } = useWalletDeepLink();
 
     // Determine expected chain ID for the active tab. Arbitrum targets
     // mainnet here — the testnet deployment is a dev-only mock DEX with no
@@ -332,6 +334,19 @@ export function SwapCard() {
                 onSwap={handleSwap}
                 disabled={disableSwap}
             />
+
+            {/* WalletConnect is supposed to auto-redirect back to the wallet
+                app for every pending request, but that's an internal SDK
+                behavior we can't fully rely on — this gives mobile users an
+                explicit way to get there when it doesn't fire on its own. */}
+            {pendingWallet && (approving || swapState === "SWAPPING") && (
+                <button
+                    onClick={openWalletApp}
+                    className="md:hidden w-full mt-3 py-3 rounded-xl bg-surface-light border border-border text-sm font-medium text-text-muted hover:text-white hover:border-primary/40 transition-all"
+                >
+                    Waiting for approval — tap to open {pendingWallet.name}
+                </button>
+            )}
             </>
             )}
         </div>
