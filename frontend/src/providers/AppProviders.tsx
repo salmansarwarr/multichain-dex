@@ -1,14 +1,12 @@
 'use client';
 
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, useAccount, useReconnect } from 'wagmi';
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 
 import { wagmiConfig } from '../config/wagmi';
 import { ChainProvider } from '../context/ChainContext';
-import { WalletModalProvider } from '../context/WalletModalContext';
-import { WalletConnectModal } from '../components/wallet/WalletConnectModal';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -24,41 +22,13 @@ const queryClient = new QueryClient();
 // live chainId/accounts directly, which is the correct fix for "the
 // connection might be stale" rather than a data-cache concern.
 function WalletVisibilitySync() {
-  const { isConnected, connector, status } = useAccount();
+  const { isConnected, connector } = useAccount();
   const { reconnect } = useReconnect();
-  const lastConnectedAtRef = useRef(0);
-  const lastHandledAtRef = useRef(0);
-
-  useEffect(() => {
-    if (status === 'connected') lastConnectedAtRef.current = Date.now();
-  }, [status]);
 
   useEffect(() => {
     function handleVisibility() {
       if (document.visibilityState !== 'visible') return;
       if (!isConnected || !connector) return;
-      // visibilitychange and pageshow both fire, in the same burst, on the
-      // exact same mobile background -> approve-in-wallet-app -> foreground
-      // round trip this reconnect() is meant to handle — so without this
-      // guard, a single "tab came back" moment calls reconnect() twice
-      // within milliseconds via the two listeners below. Two concurrent
-      // reconnect() handshakes on one WalletConnect connector race each
-      // other for the same Core, and the loser's now-stale proposal/topic
-      // surfaces as "No matching key" / "session topic doesn't exist" when
-      // the relay response for it arrives — corrupting the session and
-      // crashing the page. Collapse both listeners into a single call per
-      // foreground moment.
-      if (Date.now() - lastHandledAtRef.current < 1000) return;
-      lastHandledAtRef.current = Date.now();
-      // Returning to the tab right after approving a *brand new* connection
-      // in the wallet app also fires this same visibility event — calling
-      // reconnect() while that first handshake is still settling starts a
-      // second, competing WalletConnect pairing on the same connector.
-      // Observed on real devices as "No matching key: proposal ..." /
-      // "session topic doesn't exist" errors that corrupt the session and
-      // crash the page. Give a fresh connection a few seconds to finish
-      // settling before this is allowed to re-run the handshake.
-      if (Date.now() - lastConnectedAtRef.current < 5000) return;
       reconnect({ connectors: [connector] });
     }
     document.addEventListener('visibilitychange', handleVisibility);
@@ -88,11 +58,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
               via this app's own tab buttons), so it has to sit inside
               WagmiProvider, not outside it. */}
           <ChainProvider>
-            <WalletModalProvider>
-              <WalletVisibilitySync />
-              {children}
-              <WalletConnectModal />
-            </WalletModalProvider>
+            <WalletVisibilitySync />
+            {children}
           </ChainProvider>
         </RainbowKitProvider>
       </QueryClientProvider>

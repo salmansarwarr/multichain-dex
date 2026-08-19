@@ -1,5 +1,6 @@
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import {
+  walletConnectWallet,
   coinbaseWallet,
   trustWallet,
   binanceWallet,
@@ -31,25 +32,15 @@ const siteOrigin =
 // same-branded replacement: connects directly when MetaMask's own injected
 // provider is present (its in-app browser, or the desktop extension — no
 // relay involved either way), and falls back to standard WalletConnect
-// otherwise.
-//
-// The generic `walletConnectWallet` entry (a catch-all "scan with any
-// wallet" QR option) is deliberately NOT included either — RainbowKit spins
-// up a *second*, separately-prefixed WalletConnect Core instance
-// specifically for that one entry ("WalletConnect Core is already
-// initialized... Init() was called 2 times" in the console is this). On a
-// real device the two instances end up processing each other's relay
-// messages for pairings/sessions they don't recognize ("No matching key",
-// "session topic doesn't exist"), which corrupts the connection and was
-// observed crashing the whole page. Every wallet below already has its own
-// WalletConnect-based fallback when its extension isn't detected, so this
-// only drops the redundant generic entry, not real connectivity.
+// otherwise — the same relay walletConnectWallet uses for every other
+// wallet, confirmed reliable across the same background/foreground cycle.
 const connectors = connectorsForWallets(
   [
     {
       groupName: 'Recommended',
       wallets: [
         metaMaskWalletConnectOnly,
+        walletConnectWallet,
         trustWallet,
         binanceWallet,
         okxWallet,
