@@ -7,8 +7,6 @@ import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 
 import { wagmiConfig } from '../config/wagmi';
 import { ChainProvider } from '../context/ChainContext';
-import { WalletModalProvider } from '../context/WalletModalContext';
-import { WalletConnectModal } from '../components/wallet/WalletConnectModal';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -60,11 +58,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
               via this app's own tab buttons), so it has to sit inside
               WagmiProvider, not outside it. */}
           <ChainProvider>
-            <WalletModalProvider>
-              <WalletVisibilitySync />
-              {children}
-              <WalletConnectModal />
-            </WalletModalProvider>
+            <WalletVisibilitySync />
+            {children}
           </ChainProvider>
         </RainbowKitProvider>
       </QueryClientProvider>

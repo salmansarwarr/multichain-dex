@@ -3,9 +3,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAccount, useBalance, useSwitchChain, useReadContract } from "wagmi";
 import { formatUnits, parseUnits } from "viem";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 
 import { useChainContext } from "@/context/ChainContext";
-import { useWalletModal } from "@/context/WalletModalContext";
 import {
     BSC_TESTNET_TOKENS,
     SEPOLIA_TOKENS,
@@ -34,7 +34,7 @@ export function SwapCard() {
         chain,
     } = useAccount();
     const { switchChain } = useSwitchChain();
-    const { open: openWalletModal } = useWalletModal();
+    const { openConnectModal } = useConnectModal();
 
     // Determine expected chain ID for the active tab. Arbitrum targets
     // mainnet here — the testnet deployment is a dev-only mock DEX with no
@@ -153,7 +153,7 @@ export function SwapCard() {
             : null;
 
     // Actions
-    const handleConnect = () => openWalletModal();
+    const handleConnect = () => openConnectModal?.();
 
     const handleSwap = async () => {
         if (tokenIn && tokenOut && amountInRaw && minReceivedRaw) {
