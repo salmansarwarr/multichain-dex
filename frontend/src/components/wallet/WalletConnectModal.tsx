@@ -7,7 +7,6 @@ import {
   coinbaseWallet,
   binanceWallet,
   okxWallet,
-  walletConnectWallet,
 } from '@rainbow-me/rainbowkit/wallets';
 import { metaMaskWalletConnectOnly } from '@/config/metaMaskWalletConnectOnly';
 import { useWalletModal } from '@/context/WalletModalContext';
@@ -15,10 +14,10 @@ import { useWalletModal } from '@/context/WalletModalContext';
 type Mode = 'select' | 'computer' | 'phone';
 
 // Which wallets show up in each mode, by connector id (see config/wagmi.ts
-// for what's actually registered with wagmi). walletConnect only makes
-// sense on the "computer" side — it's a QR code to scan *with* a phone,
-// not something a phone itself would tap.
-const COMPUTER_WALLET_IDS = ['metaMask', 'coinbase', 'okx', 'binance', 'walletConnect'];
+// for what's actually registered with wagmi). No generic "walletConnect"
+// entry here — see the comment in config/wagmi.ts on why it's excluded
+// entirely (it spins up a second, conflicting WalletConnect Core instance).
+const COMPUTER_WALLET_IDS = ['metaMask', 'coinbase', 'okx', 'binance'];
 const PHONE_WALLET_IDS = ['metaMask', 'trust', 'coinbase', 'okx'];
 
 // Same wallet-creator functions used in config/wagmi.ts, called again here
@@ -33,7 +32,6 @@ const ICON_SOURCES: Record<string, (args: IconSourceArgs) => { iconUrl: string |
   coinbase: coinbaseWallet,
   binance: binanceWallet,
   okx: okxWallet,
-  walletConnect: walletConnectWallet,
 };
 
 // RainbowKit's `connectorsForWallets` only carries a wallet's real identity
