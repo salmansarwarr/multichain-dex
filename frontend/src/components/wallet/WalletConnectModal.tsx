@@ -93,15 +93,21 @@ async function redirectToWalletApp(connector: RainbowKitConnector) {
       );
     }
 
-    if (deepLink.startsWith('http')) {
-      const link = document.createElement('a');
-      link.href = deepLink;
-      link.target = '_blank';
-      link.rel = 'noreferrer noopener';
-      link.click();
-    } else {
-      window.location.href = deepLink;
-    }
+    // Always navigate the current tab rather than opening deepLink in a new
+    // one. By the time this callback runs, getUri has gone through an
+    // `await connector.getProvider()` plus an async `display_uri` event —
+    // several ticks removed from the original synchronous tap. Mobile
+    // Safari/Chrome only allow window.open()/`<a target="_blank">` within a
+    // very short window right after a real user gesture; this far outside
+    // it, opening a new tab gets silently blocked or lands as an empty/failed
+    // tab, which reads to the user as "Page couldn't load" — and can leave a
+    // second copy of the app (a second WalletConnect Core) alive if it does
+    // load, causing exactly the "No matching key" / session-topic mismatches
+    // seen when its Core gets relay traffic for a session it never proposed.
+    // location.href doesn't carry the same gesture-timing restriction, and
+    // for a universal link (https://) the OS intercepts it before any actual
+    // page load happens, so the current tab's state isn't disturbed either.
+    window.location.href = deepLink;
   });
 }
 
