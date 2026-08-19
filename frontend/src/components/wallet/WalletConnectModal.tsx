@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useConnect, type Connector } from 'wagmi';
 import {
   trustWallet,
@@ -144,6 +144,23 @@ export function WalletConnectModal() {
   const { connectors, connect, status, variables } = useConnect();
   const [mode, setMode] = useState<Mode>('select');
   const icons = useWalletIcons([...COMPUTER_WALLET_IDS, ...PHONE_WALLET_IDS]);
+  // RainbowKit's own wallet-connect button guards its connect() call with an
+  // `initialized` ref that's set synchronously the instant the handshake
+  // starts (see its ConnectorConnect view), not with React state — because a
+  // `disabled={status === 'pending'}` prop only takes effect after a render,
+  // and a mobile "ghost click" (touch browsers firing both a synthetic and a
+  // real click event for one tap) can land a second `connect({ connector })`
+  // in that gap. Two concurrent connect() calls on the same connector start
+  // two competing WalletConnect session proposals on one Core; the second
+  // clobbers the first, and the relay response for the now-abandoned
+  // proposal surfaces as "No matching key" / "session topic doesn't exist",
+  // corrupting the session and crashing the page. Mirror that same
+  // synchronous guard here.
+  const connectingRef = useRef(false);
+
+  useEffect(() => {
+    if (status !== 'pending') connectingRef.current = false;
+  }, [status]);
 
   const handleClose = () => {
     close();
@@ -224,6 +241,8 @@ export function WalletConnectModal() {
                 <button
                   key={connector.uid}
                   onClick={() => {
+                    if (connectingRef.current) return;
+                    connectingRef.current = true;
                     redirectToWalletApp(connector);
                     connect({ connector });
                   }}
