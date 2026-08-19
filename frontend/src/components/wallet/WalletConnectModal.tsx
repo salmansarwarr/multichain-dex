@@ -43,7 +43,45 @@ const ICON_SOURCES: Record<string, (args: IconSourceArgs) => { iconUrl: string |
 // all of them here except an actually-installed extension), since RainbowKit
 // reuses wagmi's own `walletConnect()` connector factory unmodified. So
 // matching/display must go through `rkDetails`, never `connector.id/.name`.
-type RainbowKitConnector = Connector & { rkDetails?: { id?: string; name?: string } };
+type RainbowKitConnector = Connector & {
+  rkDetails?: {
+    id?: string;
+    name?: string;
+    mobile?: { getUri?: (uri: string) => string };
+  };
+};
+
+// wagmi's `connect()` only starts the WalletConnect pairing handshake — it
+// never opens the wallet app itself. The app-store-provided RainbowKit modal
+// does that separately: it listens for the connector's one-off
+// `display_uri` event (fired by wagmi's walletConnect connector once a
+// pairing URI exists), turns it into that wallet's own deep link via
+// `rkDetails.mobile.getUri`, and navigates there. Skipping this step is why
+// tapping a wallet here used to just hang on "Connecting…" on a real
+// phone — the pairing URI existed, but nothing ever launched the wallet app
+// to approve it. Wallets with no `mobile.getUri` (already-injected
+// providers, or Coinbase Wallet, which redirects via its own SDK) don't
+// need this and are left alone.
+async function redirectToWalletApp(connector: RainbowKitConnector) {
+  const getUri = connector.rkDetails?.mobile?.getUri;
+  if (!getUri) return;
+
+  const provider = (await connector.getProvider()) as {
+    once?: (event: 'display_uri', callback: (uri: string) => void) => void;
+  };
+  provider.once?.('display_uri', (uri) => {
+    const deepLink = getUri(uri);
+    if (deepLink.startsWith('http')) {
+      const link = document.createElement('a');
+      link.href = deepLink;
+      link.target = '_blank';
+      link.rel = 'noreferrer noopener';
+      link.click();
+    } else {
+      window.location.href = deepLink;
+    }
+  });
+}
 
 function useWalletIcons(ids: string[]) {
   const [icons, setIcons] = useState<Record<string, string>>({});
@@ -157,7 +195,10 @@ export function WalletConnectModal() {
               return (
                 <button
                   key={connector.uid}
-                  onClick={() => connect({ connector })}
+                  onClick={() => {
+                    redirectToWalletApp(connector);
+                    connect({ connector });
+                  }}
                   disabled={status === 'pending'}
                   className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors text-left border border-border disabled:opacity-50"
                 >
