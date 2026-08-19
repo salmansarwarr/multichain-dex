@@ -39,15 +39,10 @@ export function useWalletDeepLink() {
   const open = useCallback(() => {
     const stored = readStoredWallet();
     if (!stored) return;
-    if (stored.href.startsWith('http')) {
-      const link = document.createElement('a');
-      link.href = stored.href;
-      link.target = '_blank';
-      link.rel = 'noreferrer noopener';
-      link.click();
-    } else {
-      window.location.href = stored.href;
-    }
+    // Always navigate the current tab — see the matching redirect in
+    // WalletConnectModal.tsx for why target="_blank" is avoided even for
+    // http(s) universal links.
+    window.location.href = stored.href;
   }, []);
 
   return { wallet, open };

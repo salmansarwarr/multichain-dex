@@ -27,6 +27,7 @@ function WalletVisibilitySync() {
   const { isConnected, connector, status } = useAccount();
   const { reconnect } = useReconnect();
   const lastConnectedAtRef = useRef(0);
+  const lastHandledAtRef = useRef(0);
 
   useEffect(() => {
     if (status === 'connected') lastConnectedAtRef.current = Date.now();
@@ -36,6 +37,19 @@ function WalletVisibilitySync() {
     function handleVisibility() {
       if (document.visibilityState !== 'visible') return;
       if (!isConnected || !connector) return;
+      // visibilitychange and pageshow both fire, in the same burst, on the
+      // exact same mobile background -> approve-in-wallet-app -> foreground
+      // round trip this reconnect() is meant to handle — so without this
+      // guard, a single "tab came back" moment calls reconnect() twice
+      // within milliseconds via the two listeners below. Two concurrent
+      // reconnect() handshakes on one WalletConnect connector race each
+      // other for the same Core, and the loser's now-stale proposal/topic
+      // surfaces as "No matching key" / "session topic doesn't exist" when
+      // the relay response for it arrives — corrupting the session and
+      // crashing the page. Collapse both listeners into a single call per
+      // foreground moment.
+      if (Date.now() - lastHandledAtRef.current < 1000) return;
+      lastHandledAtRef.current = Date.now();
       // Returning to the tab right after approving a *brand new* connection
       // in the wallet app also fires this same visibility event — calling
       // reconnect() while that first handshake is still settling starts a
