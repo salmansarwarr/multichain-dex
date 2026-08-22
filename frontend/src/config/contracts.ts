@@ -1,4 +1,4 @@
-import { customBscTestnet, customBsc, customSepolia, customArbitrumSepolia, customArbitrumOne } from './chains';
+import { customBscTestnet, customBsc, customSepolia, customMainnet, customArbitrumSepolia, customArbitrumOne } from './chains';
 import { Address } from 'viem';
 
 export const contracts = {
@@ -8,12 +8,10 @@ export const contracts = {
     feeRouter: (process.env.NEXT_PUBLIC_BSC_FEE_ROUTER_ADDRESS as Address) || '0x6D303DCA98459736c00FfF0507ddA414CbBF0792',
     chainId: customBscTestnet.id,
   },
-  // Not deployed yet — FeeRouter.sol is code-ready (fee-on-transfer support
-  // for tax tokens like Alfat has been added and tested) but the mainnet
-  // deploy script hasn't been run — see contracts/scripts/deploy-bsc-mainnet.ts
-  // and docs/deployments.md. Feed the real address in via env once it's live.
+  // Deployed 2026-08-22, source-verified on BscScan. Owner/fee-wallet
+  // confirmed live via on-chain reads 2026-08-23 — see docs/deployments.md.
   bscMainnet: {
-    feeRouter: (process.env.NEXT_PUBLIC_BSC_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x0000000000000000000000000000000000000000',
+    feeRouter: (process.env.NEXT_PUBLIC_BSC_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0xBd018b76A06C51f000EB3DB6a1861384643D5E16',
     chainId: customBsc.id,
   },
   sepolia: {
@@ -22,16 +20,23 @@ export const contracts = {
     feeRouter: (process.env.NEXT_PUBLIC_ETH_FEE_ROUTER_ADDRESS as Address) || '0xF27443aAdBaE8611Db6d4164ac4560eF73fa6b64',
     chainId: customSepolia.id,
   },
+  // Deployed 2026-08-22 via Remix (not the deploy script), source-verified
+  // on Etherscan. Owner/fee-wallet/router confirmed live via on-chain reads
+  // 2026-08-23 — see docs/deployments.md.
+  mainnet: {
+    feeRouter: (process.env.NEXT_PUBLIC_ETH_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x542e6c05156d8946730029589e5b785cb40cf1ba',
+    chainId: customMainnet.id,
+  },
   arbitrumSepolia: {
     // Redeployed 2026-08-05 (per-wallet pending fees, withdrawal recipient
     // param, trySafeTransfer). See docs/deployments.md.
     feeRouter: (process.env.NEXT_PUBLIC_ARB_FEE_ROUTER_ADDRESS as Address) || '0x327d2Dc9977eD987E2EB8658EfE823d71C65e614',
     chainId: customArbitrumSepolia.id,
   },
-  // Not deployed yet — Arbitrum only has a testnet (mock-DEX) deployment so far.
-  // See docs/deployments.md. Feed the real address in via env once it's live.
+  // Deployed 2026-08-22, source-verified on Arbiscan. Owner/fee-wallet
+  // confirmed live via on-chain reads 2026-08-23 — see docs/deployments.md.
   arbitrumOne: {
-    feeRouter: (process.env.NEXT_PUBLIC_ARB_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x0000000000000000000000000000000000000000',
+    feeRouter: (process.env.NEXT_PUBLIC_ARB_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x82f89bBD87c75F915736E5d346dD48f40d66c8e0',
     chainId: customArbitrumOne.id,
   },
 } as const;
@@ -40,6 +45,7 @@ export function getFeeRouterAddress(chainId: number): Address | undefined {
   if (chainId === contracts.bscTestnet.chainId) return contracts.bscTestnet.feeRouter;
   if (chainId === contracts.bscMainnet.chainId) return contracts.bscMainnet.feeRouter;
   if (chainId === contracts.sepolia.chainId) return contracts.sepolia.feeRouter;
+  if (chainId === contracts.mainnet.chainId) return contracts.mainnet.feeRouter;
   if (chainId === contracts.arbitrumSepolia.chainId) return contracts.arbitrumSepolia.feeRouter;
   if (chainId === contracts.arbitrumOne.chainId) return contracts.arbitrumOne.feeRouter;
   return undefined;

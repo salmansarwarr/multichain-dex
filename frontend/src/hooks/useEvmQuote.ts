@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { usePublicClient } from 'wagmi';
 import { Address } from 'viem';
 import { V2RouterABI } from '../abis/V2Router';
+import { FeeRouterABI } from '../abis/FeeRouter';
 import { EthFeeRouterABI } from '../abis/EthFeeRouter';
 import { NATIVE_TOKEN_ADDRESS } from '../data/tokens';
 import { getFeeRouterAddress, contracts } from '../config/contracts';
@@ -44,12 +45,38 @@ export function useEvmQuote(
         let routerAddress: Address;
         let wethAddress: Address;
 
+        // BSC's FeeRouter and the Ethereum/Arbitrum EthFeeRouter have
+        // different ABIs (pancakeRouter() vs uniswapRouter()) — branch on
+        // the chain family, not a single hardcoded chain, same as useSwap.ts.
+        const isBscFamily =
+          chainId === contracts.bscTestnet.chainId || chainId === contracts.bscMainnet.chainId;
+
         if (chainId === contracts.bscTestnet.chainId) {
           // PancakeSwap router is hardcoded in FeeRouter, but we know it for testnet
           routerAddress = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1';
           wethAddress = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd'; // WBNB
+        } else if (isBscFamily) {
+          // BSC mainnet FeeRouter exposes pancakeRouter(), not uniswapRouter()
+          routerAddress = await withRpcRetry(
+            () => publicClient.readContract({
+              address: feeRouterAddress,
+              abi: FeeRouterABI,
+              functionName: 'pancakeRouter',
+            }),
+            MAX_RETRIES,
+            BASE_DELAY_MS,
+          ) as Address;
+          wethAddress = await withRpcRetry(
+            () => publicClient.readContract({
+              address: routerAddress,
+              abi: V2RouterABI,
+              functionName: 'WETH',
+            }),
+            MAX_RETRIES,
+            BASE_DELAY_MS,
+          ) as Address;
         } else {
-          // Sepolia EthFeeRouter exposes uniswapRouter()
+          // Sepolia/Ethereum Mainnet/Arbitrum EthFeeRouter exposes uniswapRouter()
           routerAddress = await withRpcRetry(
             () => publicClient.readContract({
               address: feeRouterAddress,

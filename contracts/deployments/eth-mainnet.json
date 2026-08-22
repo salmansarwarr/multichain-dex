@@ -1,0 +1,19 @@
+{
+  "network": "ethMainnet",
+  "chainId": 1,
+  "contract": "EthFeeRouter",
+  "address": "0x542e6c05156d8946730029589e5b785cb40cf1ba",
+  "deployTxHash": null,
+  "deployedVia": "Remix (manual deployment, not deploy-eth-mainnet.ts)",
+  "deployedAt": null,
+  "verifiedOnChain": {
+    "note": "Values below read directly from the deployed contract's own view functions on 2026-08-23, not from a deploy script record.",
+    "checkedAt": "2026-08-23T00:00:00.000Z"
+  },
+  "constructorArgs": {
+    "uniswapRouter": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+    "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+    "feeBps": 15,
+    "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+  }
+}

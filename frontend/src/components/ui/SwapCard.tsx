@@ -7,9 +7,9 @@ import { useConnectModal } from "@rainbow-me/rainbowkit";
 
 import { useChainContext } from "@/context/ChainContext";
 import {
-    BSC_TESTNET_TOKENS,
-    SEPOLIA_TOKENS,
-    ARBITRUM_SEPOLIA_TOKENS,
+    BSC_MAINNET_TOKENS,
+    ETH_MAINNET_TOKENS,
+    ARBITRUM_MAINNET_TOKENS,
     Token,
     NATIVE_TOKEN_ADDRESS,
 } from "@/data/tokens";
@@ -36,30 +36,23 @@ export function SwapCard() {
     const { switchChain } = useSwitchChain();
     const { openConnectModal } = useConnectModal();
 
-    // Determine expected chain ID for the active tab. Arbitrum targets
-    // mainnet here — the testnet deployment is a dev-only mock DEX with no
-    // real liquidity, so it isn't something end users should be routed to.
+    // All three chains target mainnet — see docs/deployments.md for the
+    // live FeeRouter/EthFeeRouter addresses (deployed 2026-08-22, verified
+    // 2026-08-23).
     const expectedChainId =
         activeTab === "bsc"
-            ? contracts.bscTestnet.chainId
+            ? contracts.bscMainnet.chainId
             : activeTab === "ethereum"
-            ? contracts.sepolia.chainId
+            ? contracts.mainnet.chainId
             : contracts.arbitrumOne.chainId;
 
     const isWrongNetwork = isConnected && chain?.id !== expectedChainId;
 
-    // Arbitrum isn't live for end users on testnet (no real DEX liquidity
-    // there — see docs/deployments.md). If the connected wallet happens to
-    // be on Arbitrum Sepolia, show a "coming to mainnet" notice instead of
-    // treating it like any other wrong-network state.
-    const isArbitrumTestnetConnected =
-        activeTab === "arbitrum" && chain?.id === contracts.arbitrumSepolia.chainId;
-
     // Token Lists
     const tokens = useMemo(() => {
-        if (activeTab === "bsc") return BSC_TESTNET_TOKENS;
-        if (activeTab === "ethereum") return SEPOLIA_TOKENS;
-        return ARBITRUM_SEPOLIA_TOKENS;
+        if (activeTab === "bsc") return BSC_MAINNET_TOKENS;
+        if (activeTab === "ethereum") return ETH_MAINNET_TOKENS;
+        return ARBITRUM_MAINNET_TOKENS;
     }, [activeTab]);
 
     // Form State
@@ -68,15 +61,17 @@ export function SwapCard() {
     const [amountIn, setAmountIn] = useState("");
     const [slippage, setSlippage] = useState("0.5");
 
-    // Auto-select defaults when chain changes
+    // Auto-select defaults when chain changes. Default "you receive" to
+    // USDT specifically (by symbol, not array position) — on BSC mainnet,
+    // tokens[2] is Alfat, whose PancakeSwap V2 pool currently has
+    // insufficient liquidity for getAmountsOut, which broke the swap card
+    // on first load with nothing typed. USDT is confirmed liquid on all
+    // three chains as of 2026-08-23.
     useEffect(() => {
-        if (tokens.length >= 3) {
+        if (tokens.length >= 2) {
+            const defaultOut = tokens.find((t) => t.symbol === "USDT") ?? tokens[Math.min(2, tokens.length - 1)];
             setTokenIn(tokens[0]); // Native (e.g. tBNB, ETH)
-            setTokenOut(tokens[2]); // ERC20 (e.g. BUSD, UNI, USDC)
-            setAmountIn("");
-        } else if (tokens.length >= 2) {
-            setTokenIn(tokens[0]);
-            setTokenOut(tokens[1]);
+            setTokenOut(defaultOut);
             setAmountIn("");
         }
     }, [tokens]);
@@ -218,26 +213,6 @@ export function SwapCard() {
                 )}
             </div>
 
-            {isArbitrumTestnetConnected ? (
-                <div className="flex flex-col items-center text-center gap-3 py-12">
-                    <p className="text-base font-semibold">
-                        Arbitrum will be available on mainnet
-                    </p>
-                    <p className="text-sm text-text-muted max-w-xs">
-                        You&apos;re connected to Arbitrum Sepolia (testnet). Arbitrum
-                        swaps open up once we launch on Arbitrum One mainnet.
-                    </p>
-                    <button
-                        onClick={() =>
-                            switchChain?.({ chainId: contracts.arbitrumOne.chainId })
-                        }
-                        className="mt-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-medium transition-all"
-                    >
-                        Switch to Arbitrum Mainnet
-                    </button>
-                </div>
-            ) : (
-            <>
             <div className="relative">
                 <TokenAmountInput
                     label="You pay"
@@ -332,8 +307,6 @@ export function SwapCard() {
                 onSwap={handleSwap}
                 disabled={disableSwap}
             />
-            </>
-            )}
         </div>
     );
 }

@@ -1,0 +1,14 @@
+{
+  "network": "bscMainnet",
+  "chainId": 56,
+  "contract": "FeeRouter",
+  "address": "0xBd018b76A06C51f000EB3DB6a1861384643D5E16",
+  "deployTxHash": "0xf9c7983ea702e59c12f24cb13e1712909459ff71b81dacb61637761c8027c00d",
+  "deployedAt": "2026-08-22T18:03:20.736Z",
+  "constructorArgs": {
+    "pancakeRouter": "0x10ED43C718714eb63d5aA57B78B54704E256024E",
+    "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+    "feeBps": 15,
+    "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+  }
+}

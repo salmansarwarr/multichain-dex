@@ -126,12 +126,19 @@ noted in `docs/implementation-plan.md` Phase 3.
 
 ## Mainnets
 
-> Populated in Phase 10 only. Do not deploy to mainnet before Phase 9 security review is complete.
+| Chain | Contract | Address | Verified | Deployed At | Tx Hash | Owner |
+|---|---|---|---|---|---|---|
+| BSC Mainnet | `FeeRouter` | `0xBd018b76A06C51f000EB3DB6a1861384643D5E16` | ✅ | 2026-08-22 | `0xf9c7983ea702e59c12f24cb13e1712909459ff71b81dacb61637761c8027c00d` | `0x937Cd...66b6b` |
+| Ethereum Mainnet | `EthFeeRouter` | `0x542e6c05156d8946730029589e5b785cb40cf1ba` | ✅ | unknown (Remix, not logged) | unknown (Remix, not logged) | `0x937Cd...66b6b` |
+| Arbitrum One | `EthFeeRouter` | `0x82f89bBD87c75F915736E5d346dD48f40d66c8e0` | ✅ | 2026-08-22 | `0xeb71e30dffdbca35064d701d1afc3a60d65eb31a8bfe60d77d8d34ef3c5b32e5` | `0x937Cd...66b6b` |
 
-| Chain | Contract | Address | Verified | Deployed At | Tx Hash |
-|---|---|---|---|---|---|
-| BSC Mainnet | `FeeRouter` | — | — | — | — |
-| Ethereum Mainnet | `EthFeeRouter` | — | — | — | — |
+All three read live on-chain as of 2026-08-23: `owner()` = `0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b` (matches the address testnet ownership was transferred to), `feeWallet()` = `0x12e260D0a664736593173f335FcDcc1076eEA4De`, `feeBps()` = `15` (0.15%), `paused()` = `false`. The Ethereum Mainnet contract's `uniswapRouter()` correctly reads `0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D`, and the Arbitrum One contract's router correctly reads `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24` — the chain-specific address, not the (different) Ethereum one, confirmed live via read calls, not just assumed from the deploy config. Source verification confirmed 2026-08-23.
+
+**Still not done for any of the three:** a real smoke-test swap. See `deployments/*.json` for the machine-readable records (BSC/Arbitrum written by their deploy scripts; Ethereum's record was reconstructed from live on-chain reads since it was deployed manually via Remix, so its deploy tx hash and exact timestamp aren't captured — fill those in if you have them from your wallet/Remix history).
+
+**Frontend wired to these addresses 2026-08-23** — see `frontend/src/config/contracts.ts` (`bscMainnet`, `mainnet`, `arbitrumOne` entries) and `frontend/.env.local`.
+
+> Reminder: the project's own Phase 9 gate says not to deploy to mainnet before a completed security review. What's on record so far (the two redeploy writeups earlier in this doc) is two audit rounds on the *testnet* contracts. Worth deciding whether that coverage is considered sufficient for these three live mainnet contracts, or whether a final pass is still owed before pointing real users at them.
 
 ---
 
