@@ -105,13 +105,33 @@ export function SwapCard() {
     const isBelowMin = amountInNumber > 0 && amountInNumber < swapLimits.min;
     const isAboveMax = amountInNumber > swapLimits.max;
 
-    // Quotes
-    const { quote: evmQuoteOut, loading: evmQuoteLoading } = useEvmQuote(
+    // Quotes — also try routing through this chain's USDT as a 2-hop
+    // intermediate alongside the direct path (see useEvmQuote's
+    // `intermediateToken` param): several tokens have a much deeper
+    // USDT-paired pool than their direct WBNB/WETH one.
+    const intermediateToken = tokens.find((t) => t.symbol === "USDT")?.address;
+    const {
+        quote: evmQuoteOut,
+        loading: evmQuoteLoading,
+        error: evmQuoteError,
+        priceImpactBps,
+        path: evmQuotePath,
+    } = useEvmQuote(
         expectedChainId,
         tokenIn?.address,
         tokenOut?.address,
         amountInRaw,
+        intermediateToken,
     );
+
+    // Price impact vs. the pool's own spot price — catches thin direct
+    // pools that quote successfully but at a badly distorted rate (seen
+    // live on BSC mainnet: USDe, WLFI, MemeCore all have a direct WBNB
+    // pool with well under 1 BNB of real reserves). Thresholds match the
+    // common Uniswap/PancakeSwap-frontend convention: warn past 3%, refuse
+    // to let the user fire the swap past 15%.
+    const isHighPriceImpact = priceImpactBps !== null && priceImpactBps >= 300;
+    const isExtremePriceImpact = priceImpactBps !== null && priceImpactBps >= 1500;
 
     const amountOutDisplay =
         evmQuoteOut && tokenOut
@@ -151,14 +171,14 @@ export function SwapCard() {
     const handleConnect = () => openConnectModal?.();
 
     const handleSwap = async () => {
-        if (tokenIn && tokenOut && amountInRaw && minReceivedRaw) {
+        if (tokenIn && tokenOut && amountInRaw && minReceivedRaw && evmQuotePath) {
             await executeSwap(
                 expectedChainId,
                 tokenIn.address,
-                tokenOut.address,
                 amountInRaw,
                 minReceivedRaw,
                 evmAddress!,
+                evmQuotePath,
                 tokenIn.isFeeOnTransfer || tokenOut.isFeeOnTransfer,
             );
         }
@@ -177,7 +197,8 @@ export function SwapCard() {
         !evmQuoteOut ||
         hasInsufficientBalance ||
         isBelowMin ||
-        isAboveMax;
+        isAboveMax ||
+        isExtremePriceImpact;
 
     // Featured tax-token stat (e.g. Alfat) — read live rather than
     // hardcoded, so it can't drift from the real on-chain value.
@@ -264,6 +285,26 @@ export function SwapCard() {
                     />
                 </div>
             </div>
+
+            {amountInRaw && !evmQuoteLoading && !evmQuoteOut && evmQuoteError && (
+                <div className="mt-4 p-3 rounded-xl border text-sm text-center font-medium bg-red-500/10 border-red-500/30 text-red-400">
+                    Couldn&apos;t get a quote for this pair — insufficient liquidity or an RPC issue. Try again in a moment.
+                </div>
+            )}
+
+            {evmQuoteOut && isHighPriceImpact && (
+                <div
+                    className={`mt-4 p-3 rounded-xl border text-sm text-center font-medium ${
+                        isExtremePriceImpact
+                            ? "bg-red-500/10 border-red-500/30 text-red-400"
+                            : "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
+                    }`}
+                >
+                    {isExtremePriceImpact
+                        ? `Price impact ~${(priceImpactBps! / 100).toFixed(1)}% — this pool has too little liquidity for this trade. Swap disabled to protect you.`
+                        : `High price impact ~${(priceImpactBps! / 100).toFixed(1)}% — low liquidity for this pair, you may receive significantly less value than expected.`}
+                </div>
+            )}
 
             {amountInRaw && evmQuoteOut && (
                 <SwapDetails

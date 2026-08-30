@@ -3,7 +3,6 @@ import { useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 
 import { Address } from 'viem';
 import { FeeRouterABI } from '../abis/FeeRouter';
 import { EthFeeRouterABI } from '../abis/EthFeeRouter';
-import { V2RouterABI } from '../abis/V2Router';
 import { contracts, getFeeRouterAddress } from '../config/contracts';
 import { NATIVE_TOKEN_ADDRESS } from '../data/tokens';
 
@@ -31,17 +30,22 @@ export function useSwap() {
   const execute = async (
     chainId: number,
     tokenIn: string,
-    tokenOut: string,
     amountIn: bigint,
     amountOutMin: bigint,
     recipient: Address,
+    // The exact path (2+ addresses, WBNB/WETH-substituted for native
+    // endpoints) that produced the quote being executed — e.g. from
+    // useEvmQuote's `path`. Executing against this exact path (rather than
+    // recomputing a direct-only one here) guarantees the trade matches what
+    // the user was quoted, including any multi-hop route through a
+    // deeper-liquidity intermediate.
+    path: Address[],
     feeOnTransfer: boolean = false
   ) => {
     setState('SWAPPING');
     setError(null);
     try {
       const isNativeIn = tokenIn === NATIVE_TOKEN_ADDRESS;
-      const isNativeOut = tokenOut === NATIVE_TOKEN_ADDRESS;
 
       const feeRouterAddress = getFeeRouterAddress(chainId);
       if (!feeRouterAddress) throw new Error("Unsupported chain");
@@ -56,39 +60,6 @@ export function useSwap() {
       const isBscFamily =
         chainId === contracts.bscTestnet.chainId || chainId === contracts.bscMainnet.chainId;
       const abi = isBscFamily ? FeeRouterABI : EthFeeRouterABI;
-
-      let wethAddress: Address;
-
-      if (chainId === contracts.bscTestnet.chainId) {
-        wethAddress = '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd';
-      } else if (isBscFamily) {
-        const routerAddress = await publicClient.readContract({
-          address: feeRouterAddress,
-          abi: FeeRouterABI,
-          functionName: 'pancakeRouter',
-        }) as Address;
-        wethAddress = await publicClient.readContract({
-          address: routerAddress,
-          abi: V2RouterABI,
-          functionName: 'WETH',
-        }) as Address;
-      } else {
-        const routerAddress = await publicClient.readContract({
-          address: feeRouterAddress,
-          abi: EthFeeRouterABI,
-          functionName: 'uniswapRouter',
-        }) as Address;
-        wethAddress = await publicClient.readContract({
-          address: routerAddress,
-          abi: V2RouterABI,
-          functionName: 'WETH',
-        }) as Address;
-      }
-
-      const path = [
-        isNativeIn ? wethAddress : tokenIn as Address,
-        isNativeOut ? wethAddress : tokenOut as Address
-      ];
 
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20); // 20 mins
 

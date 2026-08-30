@@ -15,5 +15,12 @@ export const V2RouterABI = [
     "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "pure",
     "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "factory",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "pure",
+    "type": "function"
   }
 ] as const;
