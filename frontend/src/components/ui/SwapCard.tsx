@@ -105,11 +105,19 @@ export function SwapCard() {
     const isBelowMin = amountInNumber > 0 && amountInNumber < swapLimits.min;
     const isAboveMax = amountInNumber > swapLimits.max;
 
-    // Quotes — also try routing through this chain's USDT as a 2-hop
-    // intermediate alongside the direct path (see useEvmQuote's
-    // `intermediateToken` param): several tokens have a much deeper
-    // USDT-paired pool than their direct WBNB/WETH one.
-    const intermediateToken = tokens.find((t) => t.symbol === "USDT")?.address;
+    // Quotes — also try routing through known-liquid intermediates (USDT,
+    // CAKE) as a 2-hop alternative to the direct path (see useEvmQuote's
+    // `intermediateTokens` param): several tokens have a much deeper pool
+    // against one of these than their direct WBNB/WETH one — e.g. Alfat's
+    // direct WBNB pool has zero liquidity and reverts outright, but its
+    // CAKE pool is real and liquid.
+    const intermediateTokens = useMemo(
+        () =>
+            ["USDT", "CAKE"]
+                .map((symbol) => tokens.find((t) => t.symbol === symbol)?.address)
+                .filter((address): address is string => !!address),
+        [tokens],
+    );
     const {
         quote: evmQuoteOut,
         loading: evmQuoteLoading,
@@ -121,7 +129,7 @@ export function SwapCard() {
         tokenIn?.address,
         tokenOut?.address,
         amountInRaw,
-        intermediateToken,
+        intermediateTokens,
     );
 
     // Price impact vs. the pool's own spot price — catches thin direct

@@ -19,12 +19,14 @@ export function useEvmQuote(
   tokenIn: string | undefined,
   tokenOut: string | undefined,
   amountIn: bigint | undefined,
-  // A known-liquid stable token (e.g. BSC mainnet USDT) to also try routing
+  // Known-liquid tokens (e.g. BSC mainnet USDT, CAKE) to also try routing
   // through as a 2-hop intermediate, alongside the direct path. Some tokens
-  // (USDe, WLFI, MemeCore on BSC mainnet) have a nearly-empty direct WBNB
-  // pool but real liquidity against this stable, so this candidate path
-  // often quotes a far better rate than the direct one.
-  intermediateToken: string | undefined
+  // have a nearly-empty (or entirely nonexistent-liquidity) direct WBNB
+  // pool but real liquidity against one of these, so a candidate path
+  // through one can quote a far better rate than the direct one — e.g.
+  // Alfat's direct WBNB pool has zero reserves and reverts outright, but
+  // its CAKE pool is real and liquid.
+  intermediateTokens: string[] | undefined
 ) {
   const [quote, setQuote] = useState<bigint | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,6 +43,9 @@ export function useEvmQuote(
   // revert. null while unknown/not applicable (e.g. quote failed).
   const [priceImpactBps, setPriceImpactBps] = useState<number | null>(null);
   const publicClient = usePublicClient({ chainId });
+  // Stable primitive for the effect's dependency array — intermediateTokens
+  // is an array, and callers commonly pass a fresh one each render.
+  const intermediateTokensKey = (intermediateTokens ?? []).join(',');
 
   useEffect(() => {
     let active = true;
@@ -137,19 +142,26 @@ export function useEvmQuote(
           throw new Error("Amount too small after fee");
         }
 
-        // Route-shop between the direct path and a 2-hop path through a
-        // known-liquid stable (when one is given and isn't already an
-        // endpoint) — some tokens have a nearly-empty direct WBNB/WETH pool
-        // but real liquidity against the stable, so this can quote a far
-        // better rate. Each candidate is allowed to revert (e.g.
-        // INSUFFICIENT_LIQUIDITY) independently; whichever succeeding
-        // candidate yields the higher final output wins.
+        // Route-shop between the direct path and a 2-hop path through each
+        // given known-liquid intermediate (skipping any that's already an
+        // endpoint, or a duplicate) — some tokens have a nearly-empty (or
+        // zero-reserve, outright-reverting) direct WBNB/WETH pool but real
+        // liquidity against one of these, so a candidate path through one
+        // can quote a far better rate than the direct one. Each candidate
+        // is allowed to revert (e.g. INSUFFICIENT_LIQUIDITY) independently;
+        // whichever succeeding candidate yields the higher final output wins.
         const candidatePaths: Address[][] = [directPath];
-        if (
-          intermediateToken &&
-          intermediateToken.toLowerCase() !== directPath[0].toLowerCase() &&
-          intermediateToken.toLowerCase() !== directPath[1].toLowerCase()
-        ) {
+        const seenIntermediates = new Set<string>();
+        for (const intermediateToken of intermediateTokens ?? []) {
+          const key = intermediateToken.toLowerCase();
+          if (
+            key === directPath[0].toLowerCase() ||
+            key === directPath[1].toLowerCase() ||
+            seenIntermediates.has(key)
+          ) {
+            continue;
+          }
+          seenIntermediates.add(key);
           candidatePaths.push([directPath[0], intermediateToken as Address, directPath[1]]);
         }
 
@@ -295,7 +307,7 @@ export function useEvmQuote(
       active = false;
       clearTimeout(timer);
     };
-  }, [chainId, tokenIn, tokenOut, amountIn, intermediateToken, publicClient]);
+  }, [chainId, tokenIn, tokenOut, amountIn, intermediateTokensKey, publicClient]);
 
   return { quote, loading, error, priceImpactBps, path };
 }
