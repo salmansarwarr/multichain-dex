@@ -9,6 +9,13 @@ export interface Token {
   /// 6%). Swaps involving this token must route through the contract's
   /// *SupportingFeeOnTransferTokens entry points instead of the plain ones.
   isFeeOnTransfer?: boolean;
+  /// Transfer tax in basis points (out of 10_000), set whenever
+  /// isFeeOnTransfer is true. PancakeRouter's getAmountsOut (what the quote
+  /// hook calls) has no concept of this tax, so a raw quote overstates the
+  /// amount actually received/forwarded whenever this token sits at an
+  /// endpoint of the swap path — see useEvmQuote's tokenInTaxBps/
+  /// tokenOutTaxBps params, which correct for it.
+  transferTaxBps?: number;
 }
 
 export const NATIVE_TOKEN_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
@@ -101,6 +108,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     name: 'Alphaterra',
     decimals: 9,
     isFeeOnTransfer: true,
+    transferTaxBps: 600,
     logoURI: '/alfat-terra-logo.png',
   },
   {

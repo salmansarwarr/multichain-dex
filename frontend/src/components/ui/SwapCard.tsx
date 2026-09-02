@@ -130,6 +130,8 @@ export function SwapCard() {
         tokenOut?.address,
         amountInRaw,
         intermediateTokens,
+        tokenIn?.transferTaxBps,
+        tokenOut?.transferTaxBps,
     );
 
     // Price impact vs. the pool's own spot price — catches thin direct

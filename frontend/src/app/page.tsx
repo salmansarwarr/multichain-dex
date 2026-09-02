@@ -154,6 +154,46 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Same two videos as the desktop side rails above, shown here
+            instead on small screens — the side rails are `hidden` below the
+            lg breakpoint since there's no room for them next to the swap
+            card, so without this they never render on a phone at all. */}
+        <div className="lg:hidden w-full max-w-[480px] mx-auto mt-6 grid grid-cols-2 gap-3">
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative w-full aspect-square rounded-xl border-2 border-primary/30 overflow-hidden shadow-lg shadow-primary/10">
+              <video
+                src="/princess-alphaterra-video.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                aria-label="Princess Alphaterra"
+              />
+            </div>
+            <p className="text-center text-xs text-text-muted">
+              <span className="text-primary font-semibold">Princess Alphaterra</span>
+            </p>
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative w-full aspect-square rounded-xl border-2 border-primary/30 overflow-hidden shadow-lg shadow-primary/10">
+              <video
+                src="/alfat-man-video.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                aria-label="Alfat Man"
+              />
+            </div>
+            <p className="text-center text-xs text-text-muted">
+              <span className="text-primary font-semibold">Alfat Man</span>
+            </p>
+          </div>
+        </div>
+
         {isConnected && (
           <SwapHistory chainId={chain?.id} />
         )}

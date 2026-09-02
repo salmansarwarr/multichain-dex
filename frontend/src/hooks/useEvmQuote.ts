@@ -26,7 +26,20 @@ export function useEvmQuote(
   // through one can quote a far better rate than the direct one — e.g.
   // Alfat's direct WBNB pool has zero reserves and reverts outright, but
   // its CAKE pool is real and liquid.
-  intermediateTokens: string[] | undefined
+  intermediateTokens: string[] | undefined,
+  // Basis points of transfer tax on tokenIn/tokenOut (Token.transferTaxBps
+  // — 0/undefined for a normal, non fee-on-transfer token). Needed because
+  // getAmountsOut below is a pure pool-math view call with no idea a token
+  // taxes transfers, so left uncorrected it overstates the real output by
+  // however much tax applies — which then lets `amountOutMin` (derived from
+  // this quote) sit above what the pool can actually deliver, so the swap
+  // reverts with PancakeRouter's own INSUFFICIENT_OUTPUT_AMOUNT check.
+  // tokenIn's tax hits TWICE when routed through FeeRouter (once on
+  // user -> FeeRouter, again on FeeRouter -> pool — see
+  // FeeRouter.sol's _pullAndSkimFee); tokenOut's tax hits once, on the
+  // pool -> recipient transfer.
+  tokenInTaxBps: number | undefined,
+  tokenOutTaxBps: number | undefined
 ) {
   const [quote, setQuote] = useState<bigint | null>(null);
   const [loading, setLoading] = useState(false);
@@ -134,9 +147,16 @@ export function useEvmQuote(
           return;
         }
 
-        // Deduct 0.15% fee
-        const fee = (amountIn * 15n) / 10000n;
-        const amountInAfterFee = amountIn - fee;
+        // Deduct 0.15% platform fee, plus (for a fee-on-transfer tokenIn
+        // like Alfat) the two real transfer-tax hits it takes on its way
+        // into the pool — user -> FeeRouter, then FeeRouter -> pool —
+        // mirroring FeeRouter.sol's own _pullAndSkimFee order: tax, then
+        // fee off the post-tax balance, then tax again.
+        const tokenInTax = BigInt(tokenInTaxBps ?? 0);
+        const receivedByRouter = amountIn - (amountIn * tokenInTax) / 10000n;
+        const fee = (receivedByRouter * 15n) / 10000n;
+        const afterFee = receivedByRouter - fee;
+        const amountInAfterFee = afterFee - (afterFee * tokenInTax) / 10000n;
 
         if (amountInAfterFee <= 0n) {
           throw new Error("Amount too small after fee");
@@ -194,11 +214,18 @@ export function useEvmQuote(
         }
 
         const best = successes.reduce((a, b) => (b.out > a.out ? b : a));
+        // best.out is the pool's raw output, pre tokenOut tax — kept as-is
+        // below for the price-impact comparison (a pure pool-thinness
+        // signal), separate from finalOut, which additionally accounts for
+        // the tax the recipient actually pays on the pool -> recipient
+        // transfer and is what the UI quotes / amountOutMin is derived from.
         const actualOut = best.out;
+        const tokenOutTax = BigInt(tokenOutTaxBps ?? 0);
+        const finalOut = actualOut - (actualOut * tokenOutTax) / 10000n;
         const path = best.path;
 
         if (active) {
-          setQuote(actualOut);
+          setQuote(finalOut);
           setPath(path);
         }
 
@@ -307,7 +334,7 @@ export function useEvmQuote(
       active = false;
       clearTimeout(timer);
     };
-  }, [chainId, tokenIn, tokenOut, amountIn, intermediateTokensKey, publicClient]);
+  }, [chainId, tokenIn, tokenOut, amountIn, intermediateTokensKey, publicClient, tokenInTaxBps, tokenOutTaxBps]);
 
   return { quote, loading, error, priceImpactBps, path };
 }
