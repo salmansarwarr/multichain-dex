@@ -6,15 +6,15 @@
 ///
 /// Values are in the token's own display units (not raw/wei).
 export const TOKEN_SWAP_LIMITS: Record<string, { min: number; max: number }> = {
-  BNB: { min: 0.0005, max: 10 },
-  tBNB: { min: 0.0005, max: 10 },
-  WBNB: { min: 0.0005, max: 10 },
-  ETH: { min: 0.0005, max: 5 },
-  WETH: { min: 0.0005, max: 5 },
-  BUSD: { min: 1, max: 20_000 },
-  UNI: { min: 0.1, max: 5_000 },
-  USDC: { min: 1, max: 20_000 },
-  Alfat: { min: 100, max: 1_000_000 },
+  BNB: { min: 0, max: 10 },
+  tBNB: { min: 0, max: 10 },
+  WBNB: { min: 0, max: 10 },
+  ETH: { min: 0, max: 5 },
+  WETH: { min: 0, max: 5 },
+  BUSD: { min: 0, max: 20_000 },
+  UNI: { min: 0, max: 5_000 },
+  USDC: { min: 0, max: 20_000 },
+  Alfat: { min: 0, max: 1_000_000 },
 };
 
 // Applied when a token (e.g. one added via paste-address search) has no
