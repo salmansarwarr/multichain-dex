@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { Header } from '@/components/layout/Header';
 import { SwapCard } from '@/components/ui/SwapCard';
 import { WalletStatus } from '@/components/ui/WalletStatus';
+import { DisclaimerModal } from '@/components/ui/DisclaimerModal';
 import { SwapHistory } from '@/components/swap/SwapHistory';
 import { useAccount } from 'wagmi';
 
@@ -26,6 +27,7 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center">
+      <DisclaimerModal />
       <Header />
 
       <div className="flex-1 w-full px-4 relative z-10 flex flex-col items-center">
