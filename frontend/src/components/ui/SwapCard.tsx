@@ -105,15 +105,18 @@ export function SwapCard() {
     const isBelowMin = amountInNumber > 0 && amountInNumber < swapLimits.min;
     const isAboveMax = amountInNumber > swapLimits.max;
 
-    // Quotes — also try routing through known-liquid intermediates (USDT,
-    // CAKE) as a 2-hop alternative to the direct path (see useEvmQuote's
-    // `intermediateTokens` param): several tokens have a much deeper pool
-    // against one of these than their direct WBNB/WETH one — e.g. Alfat's
-    // direct WBNB pool has zero liquidity and reverts outright, but its
-    // CAKE pool is real and liquid.
+    // Quotes — also try routing through known-liquid intermediates as a
+    // 2-hop alternative to the direct path (see useEvmQuote's
+    // `intermediateTokens` param): most altcoins hold their real liquidity
+    // in the wrapped-native pool (WBNB/WETH) or a major stablecoin pair, not
+    // in a direct pair against the other token. E.g. on BSC, FET -> USDT
+    // direct quotes ~0.012 USDT while FET -> WBNB -> USDT quotes ~0.51 for
+    // the same input. Alfat's direct WBNB pool has zero liquidity and
+    // reverts outright, but its CAKE pool is real and liquid. The best
+    // output across all candidates wins.
     const intermediateTokens = useMemo(
         () =>
-            ["USDT", "CAKE"]
+            ["WBNB", "WETH", "USDT", "USDC", "BUSD", "DAI", "CAKE"]
                 .map((symbol) => tokens.find((t) => t.symbol === symbol)?.address)
                 .filter((address): address is string => !!address),
         [tokens],
