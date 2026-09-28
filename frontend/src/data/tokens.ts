@@ -82,6 +82,17 @@ export const BSC_TESTNET_TOKENS: Token[] = [
 // (https://tokens.pancakeswap.finance/pancakeswap-extended.json) rather
 // than typed from memory, specifically to avoid hand-entering a wrong
 // contract address for a real mainnet token.
+//
+// KITE, APE, and COW were removed from this list (2026-09-28) after a
+// client report of wildly wrong quotes for them: the on-chain addresses
+// are correct (verified name()/symbol()/decimals()), but none of the
+// three have a PancakeSwap V2 pool against WBNB or any of our known
+// stablecoin/CAKE intermediates — factory.getPair() returns the zero
+// address for every candidate. There is no PancakeSwap V2 route to quote,
+// so listing them here just produced either a quote error or (on an
+// address collision with a stale getAmountsOut revert) a misleading
+// number. They may have real Uniswap liquidity on Ethereum/Arbitrum
+// (kept in those chains' token lists below) — this removal is BSC-only.
 export const BSC_MAINNET_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -341,13 +352,6 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/22457/large/btt_logo.png?1696521780',
   },
   {
-    address: '0x904567252d8f48555b7447c67dca23f0372e16be',
-    symbol: 'KITE',
-    name: 'Kite',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/70426/large/KITE-ICON.png?1762328605',
-  },
-  {
     address: '0x8b194370825e37b33373e74a41009161808c1488',
     symbol: 'VELVET',
     name: 'Velvet',
@@ -369,25 +373,11 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/13029/large/axie_infinity_logo.png?1696512817',
   },
   {
-    address: '0x8f86a15ec17cb3369d8b3e666dadbc11daa82b79',
-    symbol: 'APE',
-    name: 'ApeCoin',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/24383/large/APECOIN.png?1756551529',
-  },
-  {
     address: '0x111111111117dc0aa78b770fa6a738034120c302',
     symbol: '1INCH',
     name: '1INCH',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/13469/large/1inch-logo.jpeg?1759404663',
-  },
-  {
-    address: '0x5bfdaa3f7c28b9994b56135403bf1acea02595b0',
-    symbol: 'COW',
-    name: 'CoW Protocol',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/24384/large/CoW-token_logo.png?1719524382',
   },
   {
     address: '0x62d0a8458ed7719fdaf978fe5929c6d342b0bfce',

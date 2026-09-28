@@ -126,6 +126,7 @@ export function SwapCard() {
         loading: evmQuoteLoading,
         error: evmQuoteError,
         priceImpactBps,
+        insufficientLiquidity,
         path: evmQuotePath,
     } = useEvmQuote(
         expectedChainId,
@@ -211,7 +212,8 @@ export function SwapCard() {
         hasInsufficientBalance ||
         isBelowMin ||
         isAboveMax ||
-        isExtremePriceImpact;
+        isExtremePriceImpact ||
+        insufficientLiquidity;
 
     // Featured tax-token stat (e.g. Alfat) — read live rather than
     // hardcoded, so it can't drift from the real on-chain value.
@@ -305,7 +307,13 @@ export function SwapCard() {
                 </div>
             )}
 
-            {evmQuoteOut && isHighPriceImpact && (
+            {evmQuoteOut && insufficientLiquidity && (
+                <div className="mt-4 p-3 rounded-xl border text-sm text-center font-medium bg-red-500/10 border-red-500/30 text-red-400">
+                    This pool doesn&apos;t hold enough on-chain liquidity to give a reliable price. Swap disabled to protect you.
+                </div>
+            )}
+
+            {evmQuoteOut && !insufficientLiquidity && isHighPriceImpact && (
                 <div
                     className={`mt-4 p-3 rounded-xl border text-sm text-center font-medium ${
                         isExtremePriceImpact

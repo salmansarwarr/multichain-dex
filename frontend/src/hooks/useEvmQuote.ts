@@ -7,6 +7,7 @@ import { FeeRouterABI } from '../abis/FeeRouter';
 import { EthFeeRouterABI } from '../abis/EthFeeRouter';
 import { NATIVE_TOKEN_ADDRESS } from '../data/tokens';
 import { getFeeRouterAddress, contracts } from '../config/contracts';
+import { getMinNativeReserveWei } from '../config/liquidity';
 import { withRpcRetry } from './rpcRetry';
 
 // Quote reads are single quick calls, not a chunked scan, so a couple of
@@ -55,6 +56,13 @@ export function useEvmQuote(
   // effective rate; this catches that case even when getAmountsOut doesn't
   // revert. null while unknown/not applicable (e.g. quote failed).
   const [priceImpactBps, setPriceImpactBps] = useState<number | null>(null);
+  // True when some hop of the winning path touches the wrapped-native
+  // token (WBNB/WETH) with a reserve below config/liquidity.ts's floor —
+  // i.e. the pool is essentially dead, not just thin for this trade size.
+  // Separate from priceImpactBps: a small enough trade against a dead pool
+  // can still compute a low impact percentage, so that check alone won't
+  // catch it. See config/liquidity.ts for the full rationale.
+  const [insufficientLiquidity, setInsufficientLiquidity] = useState(false);
   const publicClient = usePublicClient({ chainId });
   // Stable primitive for the effect's dependency array — intermediateTokens
   // is an array, and callers commonly pass a fresh one each render.
@@ -69,6 +77,7 @@ export function useEvmQuote(
         setLoading(false);
         setError(null);
         setPriceImpactBps(null);
+        setInsufficientLiquidity(false);
         setPath(null);
         return;
       }
@@ -250,6 +259,8 @@ export function useEvmQuote(
 
           let idealAmount = amountInAfterFee;
           let impactKnown = true;
+          const minNativeReserve = getMinNativeReserveWei(chainId);
+          let hitDeadPool = false;
 
           for (let i = 0; i < path.length - 1 && impactKnown; i++) {
             const hopIn = path[i];
@@ -294,6 +305,19 @@ export function useEvmQuote(
               break;
             }
 
+            // Dead-pool floor, independent of this trade's size — see
+            // config/liquidity.ts. Only meaningful on the hop's
+            // wrapped-native side; the other side is an arbitrary token
+            // with its own decimals/valuation, not comparable to a wei
+            // threshold.
+            if (minNativeReserve !== null) {
+              if (hopIn.toLowerCase() === wethAddress.toLowerCase() && reserveIn < minNativeReserve) {
+                hitDeadPool = true;
+              } else if (hopOut.toLowerCase() === wethAddress.toLowerCase() && reserveOut < minNativeReserve) {
+                hitDeadPool = true;
+              }
+            }
+
             // No-slippage reference price from reserves *before* this
             // trade, compounded across hops so both sides are on equal
             // footing with the real (slippage-affected) quote.
@@ -308,10 +332,14 @@ export function useEvmQuote(
           } else if (active) {
             setPriceImpactBps(null);
           }
+          if (active) setInsufficientLiquidity(hitDeadPool);
         } catch {
           // Best-effort only — an RPC hiccup here shouldn't hide a
           // perfectly good quote.
-          if (active) setPriceImpactBps(null);
+          if (active) {
+            setPriceImpactBps(null);
+            setInsufficientLiquidity(false);
+          }
         }
       } catch (err: any) {
         if (active) {
@@ -320,6 +348,7 @@ export function useEvmQuote(
           setQuote(null);
           setPath(null);
           setPriceImpactBps(null);
+          setInsufficientLiquidity(false);
         }
       } finally {
         if (active) {
@@ -336,5 +365,5 @@ export function useEvmQuote(
     };
   }, [chainId, tokenIn, tokenOut, amountIn, intermediateTokensKey, publicClient, tokenInTaxBps, tokenOutTaxBps]);
 
-  return { quote, loading, error, priceImpactBps, path };
+  return { quote, loading, error, priceImpactBps, insufficientLiquidity, path };
 }
