@@ -595,6 +595,16 @@ export const ARBITRUM_SEPOLIA_TOKENS: Token[] = [
 // Addresses/logos matched against the client's requested list via
 // CoinGecko's top-500-by-market-cap + platforms database, decimals
 // confirmed by an on-chain decimals() call — see conversation history.
+//
+// CAKE, RLUSD, MNT, ICP, MORPHO, ARB, BONK, KITE, SYRUP, EIGEN, CFG, and ZK
+// were removed from this list (2026-09-28), after the BSC KITE/APE/COW
+// incident prompted a full sweep of every token on every mainnet. Unlike
+// the BSC cases, these aren't illiquid — I confirmed each has a real,
+// active Uniswap V3 pool against WETH — but this app only routes through
+// Uniswap V2 (see useEvmQuote.ts), and none of the twelve have a V2 pool
+// at all, so every quote attempt for them fails outright with "no route
+// found". Listing them just sends users into a dead end. They can come
+// back once/if V2 routing here is extended to also check V3.
 export const ETH_MAINNET_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -624,13 +634,6 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     name: 'USDC',
     decimals: 6,
     logoURI: 'https://coin-images.coingecko.com/coins/images/6319/large/USDC.png?1769615602',
-  },
-  {
-    address: '0x152649ea73beab28c5b49b26eb48f7ead6d4c898',
-    symbol: 'CAKE',
-    name: 'PancakeSwap',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/12632/large/pancakeswap-cake-logo_%281%29.png?1696512440',
   },
   {
     address: '0x514910771af9ca656af840dff83e8264ecf986ca',
@@ -703,13 +706,6 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/4463/large/WeChat_Image_20220118095654.png?1696505053',
   },
   {
-    address: '0x8292bb45bf1ee4d140127049757c2e0ff06317ed',
-    symbol: 'RLUSD',
-    name: 'Ripple USD',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/39651/large/RLUSD_200x200_%281%29.png?1727376633',
-  },
-  {
     address: '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9',
     symbol: 'AAVE',
     name: 'Aave',
@@ -724,13 +720,6 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/39925/large/sky.jpg?1724827980',
   },
   {
-    address: '0x3c3a81e81dc49a522a592e7622a7e711c06bf354',
-    symbol: 'MNT',
-    name: 'Mantle',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/30980/large/MNT_Token_Logo.png?1765516974',
-  },
-  {
     address: '0x163f8c2467924be0ae7b5347228cabf260318753',
     symbol: 'WLD',
     name: 'Worldcoin',
@@ -738,25 +727,11 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/31069/large/worldcoin.jpeg?1696529903',
   },
   {
-    address: '0x00f3c42833c3170159af4e92dbb451fb3f708917',
-    symbol: 'ICP',
-    name: 'Internet Computer',
-    decimals: 8,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/14495/large/Internet_Computer_logo.png?1696514180',
-  },
-  {
     address: '0x6982508145454ce325ddbe47a25d4ec3d2311933',
     symbol: 'PEPE',
     name: 'Pepe',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/29850/large/pepe-token.jpeg?1696528776',
-  },
-  {
-    address: '0x58d97b57bb95320f9a05dc918aef65434969c2b2',
-    symbol: 'MORPHO',
-    name: 'Morpho',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/29837/large/Morpho-token-icon.png?1726771230',
   },
   {
     address: '0x455e53cbb86018ac2b8092fdcd39d8444affc3f6',
@@ -785,13 +760,6 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     name: 'Quant',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/3370/large/5ZOu7brX_400x400.jpg?1696504070',
-  },
-  {
-    address: '0xb50721bcf8d664c30412cfbc6cf7a15145234ad1',
-    symbol: 'ARB',
-    name: 'Arbitrum',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/16547/large/arb.jpg?1721358242',
   },
   {
     address: '0xe28b3b32b6c345a34ff64674606124dd5aceca30',
@@ -871,13 +839,6 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/15069/large/Pendle_Logo_Normal-03.png?1696514728',
   },
   {
-    address: '0x1151cb3d861920e07a38e03eead12c32178567f6',
-    symbol: 'BONK',
-    name: 'Bonk',
-    decimals: 5,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/28600/large/bonk.jpg?1696527587',
-  },
-  {
     address: '0xc669928185dbce49d2230cc9b0979be6dc797957',
     symbol: 'BTT',
     name: 'BitTorrent',
@@ -899,32 +860,11 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/13876/large/JASMY200x200.jpg?1696513620',
   },
   {
-    address: '0x904567252d8f48555b7447c67dca23f0372e16be',
-    symbol: 'KITE',
-    name: 'Kite',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/70426/large/KITE-ICON.png?1762328605',
-  },
-  {
-    address: '0x643c4e15d7d62ad0abec4a9bd4b001aa3ef52d66',
-    symbol: 'SYRUP',
-    name: 'Maple Finance',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/51232/large/_syrup_token_logo.png?1747292046',
-  },
-  {
     address: '0xca14007eff0db1f8135f4c25b34de49ab0d42766',
     symbol: 'STRK',
     name: 'Starknet',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/26433/large/starknet.png?1696525507',
-  },
-  {
-    address: '0xec53bf9167f50cdeb3ae105f56099aaab9061f83',
-    symbol: 'EIGEN',
-    name: 'EigenCloud (prev. EigenLayer)',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/37441/large/eigencloud.jpg?1751003565',
   },
   {
     address: '0xc18360217d8f7ab5e7c516566761ea12ce7f9d72',
@@ -997,13 +937,6 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/13469/large/1inch-logo.jpeg?1759404663',
   },
   {
-    address: '0xcccccccccc33d538dbc2ee4feab0a7a1ff4e8a94',
-    symbol: 'CFG',
-    name: 'Centrifuge',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/55913/large/centrifuge.jpg?1747707741',
-  },
-  {
     address: '0xd1d2eb1b1e90b638588728b4130137d262c87cae',
     symbol: 'GALA',
     name: 'GALA',
@@ -1016,13 +949,6 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     name: 'Golem',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/542/large/Golem_Submark_Positive_RGB.png?1696501761',
-  },
-  {
-    address: '0x66a5cfb2e9c529f14fe6364ad1075df3a649c0a5',
-    symbol: 'ZK',
-    name: 'ZKsync',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/38043/large/ZKTokenBlack.png?1718614502',
   },
   {
     address: '0x6f40d4a6237c257fff2db00fa0510deeecd303eb',
@@ -1064,6 +990,13 @@ export const ETH_MAINNET_TOKENS: Token[] = [
 // Arbitrum One (mainnet) — not deployed yet (see contracts.arbitrumOne in
 // config/contracts.ts, currently address(0)). Same sourcing method as
 // ETH_MAINNET_TOKENS above.
+//
+// CAKE, MORPHO, ENA, CRV, GNO, APE, FLUID, and RSR were removed
+// (2026-09-28) for the same reason as the twelve pulled from
+// ETH_MAINNET_TOKENS above: each has real Uniswap V3 liquidity on
+// Arbitrum but no V2 pool, and this app only routes through V2, so every
+// quote attempt reverted with "no route found". See that comment for
+// detail; same fix applies here.
 export const ARBITRUM_MAINNET_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -1093,13 +1026,6 @@ export const ARBITRUM_MAINNET_TOKENS: Token[] = [
     name: 'USD₮0 (Tether, Arbitrum)',
     decimals: 6,
     logoURI: 'https://coin-images.coingecko.com/coins/images/325/large/Tether.png?1696501661',
-  },
-  {
-    address: '0x1b896893dfc86bb67cf57767298b9073d2c1ba2c',
-    symbol: 'CAKE',
-    name: 'PancakeSwap',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/12632/large/pancakeswap-cake-logo_%281%29.png?1696512440',
   },
   {
     address: '0xf97f4df75117a78c1a5a0dbb814af92458539fb4',
@@ -1137,20 +1063,6 @@ export const ARBITRUM_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/29850/large/pepe-token.jpeg?1696528776',
   },
   {
-    address: '0x40bd670a58238e6e230c430bbb5ce6ec0d40df48',
-    symbol: 'MORPHO',
-    name: 'Morpho',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/29837/large/Morpho-token-icon.png?1726771230',
-  },
-  {
-    address: '0x58538e6a46e07434d7e7375bc268d3cb839c0133',
-    symbol: 'ENA',
-    name: 'Ethena',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/36530/large/ethena.png?1711701436',
-  },
-  {
     address: '0x912ce59144191c1204e64559fe8253a0e49e6548',
     symbol: 'ARB',
     name: 'Arbitrum',
@@ -1172,25 +1084,11 @@ export const ARBITRUM_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/13573/large/Lido_DAO.png?1696513326',
   },
   {
-    address: '0x11cdb42b0eb46d95f990bedd4695a6e3fa034978',
-    symbol: 'CRV',
-    name: 'Curve DAO',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/12124/large/Curve.png?1696511967',
-  },
-  {
     address: '0x6985884c4392d348587b19cb9eaaf157f13271cd',
     symbol: 'ZRO',
     name: 'LayerZero',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/28206/large/ftxG9_TJ_400x400.jpeg?1696527208',
-  },
-  {
-    address: '0xa0b862f60edef4452f25b4160f177db44deb6cf1',
-    symbol: 'GNO',
-    name: 'Gnosis',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/662/large/logo_square_simple_300px.png?1696501854',
   },
   {
     address: '0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8',
@@ -1221,31 +1119,10 @@ export const ARBITRUM_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/10775/large/COMP.png?1696510737',
   },
   {
-    address: '0x7f9fbf9bdd3f4105c478b996b648fe6e828a1e98',
-    symbol: 'APE',
-    name: 'ApeCoin',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/24383/large/APECOIN.png?1756551529',
-  },
-  {
-    address: '0x61e030a56d33e8260fdd81f03b162a79fe3449cd',
-    symbol: 'FLUID',
-    name: 'Fluid',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/14688/large/Frame_1686566116_%281%29_%281%29.png?1784708239',
-  },
-  {
     address: '0xcb8b5cd20bdcaea9a010ac1f8d835824f5c87a04',
     symbol: 'COW',
     name: 'CoW Protocol',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/24384/large/CoW-token_logo.png?1719524382',
-  },
-  {
-    address: '0xca5ca9083702c56b481d1eec86f1776fdbd2e594',
-    symbol: 'RSR',
-    name: 'Reserve Rights',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/8365/large/RSR_Blue_Circle_1000.png?1721777856',
   },
 ];
