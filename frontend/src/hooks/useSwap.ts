@@ -40,7 +40,16 @@ export function useSwap() {
     // the user was quoted, including any multi-hop route through a
     // deeper-liquidity intermediate.
     path: Address[],
-    feeOnTransfer: boolean = false
+    feeOnTransfer: boolean = false,
+    // Which router version produced this quote (useEvmQuote's
+    // `quoteVersion`) — 'v2' by default for every caller that predates
+    // this param (Ethereum/Arbitrum's EthFeeRouter has no V3 functions at
+    // all yet, and BSC only ever returns 'v3' once the configured
+    // FeeRouter contract actually has them — see useEvmQuote.ts). When
+    // 'v3', `v3Fee` (useEvmQuote's `v3Fee`) must be the winning pool's fee
+    // tier — required by the V3 functions' `fee` param, meaningless for V2.
+    quoteVersion: 'v2' | 'v3' = 'v2',
+    v3Fee: number | null = null
   ) => {
     setState('SWAPPING');
     setError(null);
@@ -63,7 +72,41 @@ export function useSwap() {
 
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20); // 20 mins
 
-      if (isNativeIn) {
+      // V3 execution — BSC only (see useEvmQuote.ts; quoteVersion can only
+      // be 'v3' there), direct/single-hop only, matching what's actually
+      // quoted right now. tokenIn/tokenOut come from `path`'s two ends
+      // (already WBNB-substituted for a native endpoint by useEvmQuote),
+      // not the raw `tokenIn` param, since the V3 token->token function
+      // needs a real ERC20 address on both sides.
+      //
+      // NOTE (pre-existing, not introduced here): neither this V3 branch
+      // nor the V2 branch below has a "deliver native BNB out" path —
+      // FeeRouter.sol has no plain swapExactTokensForETHWithFee at all,
+      // only the ETH-in direction. If tokenOut is native BNB, path's last
+      // entry is WBNB, and the *ForTokens* call below delivers wrapped
+      // WBNB to `recipient`, not native BNB — same gap the pre-2026-09-29
+      // V2-only contract already had. FeeRouter.sol's new
+      // swapExactTokensForETHV3WithFee (added alongside V3 support) can
+      // close this once the frontend is intentionally wired for a native
+      // BNB *output*, which is a separate change from this one.
+      if (quoteVersion === 'v3' && v3Fee !== null) {
+        if (isNativeIn) {
+          await writeContractAsync({
+            address: feeRouterAddress,
+            abi,
+            functionName: 'swapExactETHForTokensV3WithFee',
+            args: [amountOutMin, path[path.length - 1], v3Fee, recipient, deadline],
+            value: amountIn,
+          });
+        } else {
+          await writeContractAsync({
+            address: feeRouterAddress,
+            abi,
+            functionName: 'swapExactTokensForTokensV3WithFee',
+            args: [amountIn, amountOutMin, path[0], path[path.length - 1], v3Fee, recipient, deadline],
+          });
+        }
+      } else if (isNativeIn) {
         await writeContractAsync({
           address: feeRouterAddress,
           abi,

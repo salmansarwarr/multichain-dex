@@ -32,6 +32,14 @@ import * as path from "path";
 
 const ALFAT_TOKEN = "0x834ee470ddb53b9337f07d909b10461c3035bb38";
 
+// WBNB on BSC Mainnet — confirmed live via PancakeSwap Router's own WETH()
+// call elsewhere in this codebase (see frontend/src/hooks/useEvmQuote.ts).
+// Needed as `path[0]` below: PancakeRouter's swapExactETHForTokens* family
+// requires path[0] === WETH() exactly and reverts "INVALID_PATH" against
+// anything else, including (bug found 2026-09-29, fixed here) the
+// router's own address, which this script previously passed by mistake.
+const WBNB = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+
 // Swap 0.001 BNB — small enough to keep this a smoke test, not a real trade.
 const SWAP_AMOUNT = ethers.parseEther("0.001");
 
@@ -112,7 +120,7 @@ async function main() {
   // -----------------------------------------------------------------------
   console.log("\n[ 2 ] swapExactETHForTokensWithFeeSupportingFeeOnTransferTokens (0.001 BNB -> Alfat)");
 
-  const swapPath = [actualRouter, ALFAT_TOKEN];
+  const swapPath = [WBNB, ALFAT_TOKEN];
   let swapSucceeded = false;
 
   try {

@@ -2,13 +2,32 @@
   "network": "bscMainnet",
   "chainId": 56,
   "contract": "FeeRouter",
-  "address": "0xBd018b76A06C51f000EB3DB6a1861384643D5E16",
-  "deployTxHash": "0xf9c7983ea702e59c12f24cb13e1712909459ff71b81dacb61637761c8027c00d",
-  "deployedAt": "2026-08-22T18:03:20.736Z",
+  "address": "0x5DFdFe850C613cf043c5e016b9B5A0a0415F5807",
+  "deployTxHash": "0x69680c4afa89429eea012ef7790496947e97877e0d3100325439899ff97610ed",
+  "deployedAt": "2026-09-29T03:55:58.000Z",
   "constructorArgs": {
     "pancakeRouter": "0x10ED43C718714eb63d5aA57B78B54704E256024E",
+    "v3Router": "0x1b81D678ffb9C0263b24A97847620C99d213eB14",
+    "wrappedNative": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
     "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
     "feeBps": 15,
     "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
-  }
+  },
+  "notes": "Deployment record written by hand after the deploy-bsc-mainnet.ts script crashed post-broadcast (an ethers v6 / RPC formatting bug on the contract-creation receipt's `to` field, not a deployment failure — see deploy-bsc-mainnet.ts's header comment). Deployment itself succeeded on-chain: verified via eth_getTransactionReceipt (status 0x1) and by reading pancakeRouter()/v3Router()/wrappedNative()/feeWallet()/feeBps()/owner() back from the deployed contract, all matching these constructorArgs exactly.",
+  "previousDeployments": [
+    {
+      "contract": "FeeRouter",
+      "address": "0xBd018b76A06C51f000EB3DB6a1861384643D5E16",
+      "deployTxHash": "0xf9c7983ea702e59c12f24cb13e1712909459ff71b81dacb61637761c8027c00d",
+      "deployedAt": "2026-08-22T18:03:20.736Z",
+      "constructorArgs": {
+        "pancakeRouter": "0x10ED43C718714eb63d5aA57B78B54704E256024E",
+        "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+        "feeBps": 15,
+        "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+      },
+      "replacedAt": "2026-09-29T03:55:58.000Z",
+      "replacedReason": "2026-09-29 PancakeSwap V3 swap support added (see FeeRouter.sol header comment) — V2-only contract had no route to real liquidity for several tokens (KITE, APE, WLFI, PENGU, PENDLE, NIGHT, ZRO, BONK, MemeCore) that turned out to only have V3 pools on BSC."
+    }
+  ]
 }

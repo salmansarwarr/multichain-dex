@@ -24,9 +24,29 @@ async function deployFixture() {
     value: ethers.parseEther("100"),
   });
 
+  // V3 mock router + wrapped-native mock, deployed alongside the V2 ones
+  // on every fixture so both the existing V2 tests and the new V3 tests
+  // (below) share one deployment path.
+  const MockPancakeV3Router = await ethers.getContractFactory("MockPancakeV3Router");
+  const mockV3Router = await MockPancakeV3Router.deploy();
+
+  const MockWETH = await ethers.getContractFactory("MockWETH");
+  const wrappedNative = await MockWETH.deploy();
+
+  await tokenOut.mint(await mockV3Router.getAddress(), ethers.parseUnits("1000000", 18));
+  await wrappedNative.mint(await mockV3Router.getAddress(), ethers.parseUnits("1000000", 18));
+  // Funds the mock WETH's own balance so withdraw() (called by FeeRouter
+  // when unwrapping a token->BNB V3 swap's output) has real ETH to pay out.
+  await owner.sendTransaction({
+    to: await wrappedNative.getAddress(),
+    value: ethers.parseEther("100"),
+  });
+
   const FeeRouter = await ethers.getContractFactory("FeeRouter");
   const feeRouter = await FeeRouter.deploy(
     await mockRouter.getAddress(),
+    await mockV3Router.getAddress(),
+    await wrappedNative.getAddress(),
     feeWallet.address,
     FEE_BPS,
     owner.address
@@ -35,8 +55,9 @@ async function deployFixture() {
   // Fund the user with tokenIn and approve the FeeRouter.
   await tokenIn.mint(user.address, ethers.parseUnits("1000", 18));
   await tokenIn.connect(user).approve(await feeRouter.getAddress(), ethers.MaxUint256);
+  await wrappedNative.connect(user).approve(await feeRouter.getAddress(), ethers.MaxUint256);
 
-  return { owner, feeWallet, user, other, tokenIn, tokenOut, mockRouter, feeRouter };
+  return { owner, feeWallet, user, other, tokenIn, tokenOut, mockRouter, mockV3Router, wrappedNative, feeRouter };
 }
 
 async function deflationaryFixture() {
@@ -62,8 +83,10 @@ function computeFee(amountIn: bigint, feeBps: bigint = FEE_BPS): { fee: bigint; 
 describe("FeeRouter", function () {
   describe("Deployment", function () {
     it("sets constructor params correctly", async function () {
-      const { feeRouter, mockRouter, feeWallet, owner } = await loadFixture(deployFixture);
+      const { feeRouter, mockRouter, mockV3Router, wrappedNative, feeWallet, owner } = await loadFixture(deployFixture);
       expect(await feeRouter.pancakeRouter()).to.equal(await mockRouter.getAddress());
+      expect(await feeRouter.v3Router()).to.equal(await mockV3Router.getAddress());
+      expect(await feeRouter.wrappedNative()).to.equal(await wrappedNative.getAddress());
       expect(await feeRouter.feeWallet()).to.equal(feeWallet.address);
       expect(await feeRouter.feeBps()).to.equal(FEE_BPS);
       expect(await feeRouter.owner()).to.equal(owner.address);
@@ -74,11 +97,11 @@ describe("FeeRouter", function () {
       const [owner, feeWallet] = await ethers.getSigners();
 
       await expect(
-        FeeRouter.deploy(ethers.ZeroAddress, feeWallet.address, FEE_BPS, owner.address)
+        FeeRouter.deploy(ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, FEE_BPS, owner.address)
       ).to.be.revertedWithCustomError(FeeRouter, "ZeroAddress");
 
       await expect(
-        FeeRouter.deploy(owner.address, ethers.ZeroAddress, FEE_BPS, owner.address)
+        FeeRouter.deploy(owner.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, FEE_BPS, owner.address)
       ).to.be.revertedWithCustomError(FeeRouter, "ZeroAddress");
     });
 
@@ -87,10 +110,26 @@ describe("FeeRouter", function () {
       const [owner, feeWallet] = await ethers.getSigners();
 
       await expect(
-        FeeRouter.deploy(owner.address, feeWallet.address, MAX_FEE_BPS + 1n, owner.address)
+        FeeRouter.deploy(owner.address, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, MAX_FEE_BPS + 1n, owner.address)
       )
         .to.be.revertedWithCustomError(FeeRouter, "FeeExceedsCap")
         .withArgs(MAX_FEE_BPS + 1n, MAX_FEE_BPS);
+    });
+
+    it("allows deploying with V3 support disabled (zero v3Router/wrappedNative)", async function () {
+      const FeeRouter = await ethers.getContractFactory("FeeRouter");
+      const [owner, feeWallet] = await ethers.getSigners();
+
+      const feeRouter = await FeeRouter.deploy(
+        owner.address,
+        ethers.ZeroAddress,
+        ethers.ZeroAddress,
+        feeWallet.address,
+        FEE_BPS,
+        owner.address
+      );
+      expect(await feeRouter.v3Router()).to.equal(ethers.ZeroAddress);
+      expect(await feeRouter.wrappedNative()).to.equal(ethers.ZeroAddress);
     });
   });
 
@@ -580,6 +619,244 @@ describe("FeeRouter", function () {
 
       const feeWalletBalAfter = await ethers.provider.getBalance(feeWallet.address);
       expect(feeWalletBalAfter - feeWalletBalBefore).to.equal(expectedFee);
+    });
+  });
+
+  describe("PancakeSwap V3 support", function () {
+    // Packs a V3 path the same way the frontend would: token(20) . fee(3) . token(20) [...].
+    function encodeV3Path(tokens: string[], fees: number[]): string {
+      let path = tokens[0].toLowerCase();
+      for (let i = 0; i < fees.length; i++) {
+        path += fees[i].toString(16).padStart(6, "0") + tokens[i + 1].slice(2).toLowerCase();
+      }
+      return path;
+    }
+
+    async function deployV3DisabledFixture() {
+      const base = await deployFixture();
+      const { owner, mockRouter, feeWallet } = base;
+
+      const FeeRouter = await ethers.getContractFactory("FeeRouter");
+      const v3DisabledRouter = await FeeRouter.deploy(
+        await mockRouter.getAddress(),
+        ethers.ZeroAddress,
+        ethers.ZeroAddress,
+        feeWallet.address,
+        FEE_BPS,
+        owner.address
+      );
+      return { ...base, v3DisabledRouter };
+    }
+
+    describe("Single-hop token -> token (exactInputSingle)", function () {
+      it("skims the fee and swaps the remainder at the mock's rate", async function () {
+        const { feeRouter, user, tokenIn, tokenOut } = await loadFixture(deployFixture);
+        const amountIn = ONE_TOKEN;
+        const { fee: expectedFee, afterFee } = computeFee(amountIn);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+        await expect(
+          feeRouter
+            .connect(user)
+            .swapExactTokensForTokensV3WithFee(
+              amountIn,
+              0,
+              await tokenIn.getAddress(),
+              await tokenOut.getAddress(),
+              500,
+              user.address,
+              deadline
+            )
+        )
+          .to.emit(feeRouter, "SwapExecuted")
+          .withArgs(user.address, await tokenIn.getAddress(), await tokenOut.getAddress(), amountIn, expectedFee);
+
+        expect(await tokenOut.balanceOf(user.address)).to.equal(afterFee);
+      });
+
+      it("reverts with ZeroFeeTier on fee == 0", async function () {
+        const { feeRouter, user, tokenIn, tokenOut } = await loadFixture(deployFixture);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+        await expect(
+          feeRouter
+            .connect(user)
+            .swapExactTokensForTokensV3WithFee(
+              ONE_TOKEN,
+              0,
+              await tokenIn.getAddress(),
+              await tokenOut.getAddress(),
+              0,
+              user.address,
+              deadline
+            )
+        ).to.be.revertedWithCustomError(feeRouter, "ZeroFeeTier");
+      });
+
+      it("reverts with V3RouterNotSet when deployed without a v3Router", async function () {
+        const { v3DisabledRouter, user, tokenIn, tokenOut } = await loadFixture(deployV3DisabledFixture);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+        await tokenIn.mint(user.address, ONE_TOKEN);
+        await tokenIn.connect(user).approve(await v3DisabledRouter.getAddress(), ethers.MaxUint256);
+
+        await expect(
+          v3DisabledRouter
+            .connect(user)
+            .swapExactTokensForTokensV3WithFee(
+              ONE_TOKEN,
+              0,
+              await tokenIn.getAddress(),
+              await tokenOut.getAddress(),
+              500,
+              user.address,
+              deadline
+            )
+        ).to.be.revertedWithCustomError(v3DisabledRouter, "V3RouterNotSet");
+      });
+
+      it("respects pause()", async function () {
+        const { feeRouter, owner, user, tokenIn, tokenOut } = await loadFixture(deployFixture);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+        await feeRouter.connect(owner).pause();
+
+        await expect(
+          feeRouter
+            .connect(user)
+            .swapExactTokensForTokensV3WithFee(
+              ONE_TOKEN,
+              0,
+              await tokenIn.getAddress(),
+              await tokenOut.getAddress(),
+              500,
+              user.address,
+              deadline
+            )
+        ).to.be.revertedWithCustomError(feeRouter, "EnforcedPause");
+      });
+    });
+
+    describe("Multi-hop token -> token (exactInput)", function () {
+      it("decodes tokenIn/tokenOut from the path and swaps correctly", async function () {
+        const { feeRouter, user, tokenIn, tokenOut, mockV3Router } = await loadFixture(deployFixture);
+        const intermediate = await (await ethers.getContractFactory("MockERC20")).deploy("Mid", "MID", 18);
+        await intermediate.mint(await mockV3Router.getAddress(), ethers.parseUnits("1000000", 18));
+
+        const amountIn = ONE_TOKEN;
+        const { fee: expectedFee, afterFee } = computeFee(amountIn);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+        const path = encodeV3Path(
+          [await tokenIn.getAddress(), await intermediate.getAddress(), await tokenOut.getAddress()],
+          [500, 500]
+        );
+
+        await expect(
+          feeRouter.connect(user).swapExactTokensForTokensV3MultiHopWithFee(amountIn, 0, path, user.address, deadline)
+        )
+          .to.emit(feeRouter, "SwapExecuted")
+          .withArgs(user.address, await tokenIn.getAddress(), await tokenOut.getAddress(), amountIn, expectedFee);
+
+        expect(await tokenOut.balanceOf(user.address)).to.equal(afterFee);
+      });
+
+      it("reverts with InvalidV3Path on a malformed path length", async function () {
+        const { feeRouter, user, tokenIn } = await loadFixture(deployFixture);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+        // 20 + 3 + 20 + 1 stray byte — not a valid packed path length.
+        const badPath = encodeV3Path([await tokenIn.getAddress(), await tokenIn.getAddress()], [500]) + "00";
+
+        await expect(
+          feeRouter.connect(user).swapExactTokensForTokensV3MultiHopWithFee(ONE_TOKEN, 0, badPath, user.address, deadline)
+        ).to.be.revertedWithCustomError(feeRouter, "InvalidV3Path");
+      });
+    });
+
+    describe("Native BNB -> token (exactInputSingle, wrap-then-swap)", function () {
+      it("skims the fee off msg.value, wraps the remainder, and delivers tokenOut", async function () {
+        const { feeRouter, user, tokenOut } = await loadFixture(deployFixture);
+        const amountIn = ethers.parseEther("1");
+        const { afterFee } = computeFee(amountIn);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+        await feeRouter
+          .connect(user)
+          .swapExactETHForTokensV3WithFee(0, await tokenOut.getAddress(), 500, user.address, deadline, {
+            value: amountIn,
+          });
+
+        expect(await tokenOut.balanceOf(user.address)).to.equal(afterFee);
+      });
+
+      it("reverts with WrappedNativeNotSet when v3Router is set but wrappedNative isn't", async function () {
+        const { owner, mockRouter, mockV3Router, feeWallet, user, tokenOut } = await loadFixture(deployFixture);
+        const FeeRouter = await ethers.getContractFactory("FeeRouter");
+        const noWrappedNative = await FeeRouter.deploy(
+          await mockRouter.getAddress(),
+          await mockV3Router.getAddress(),
+          ethers.ZeroAddress,
+          feeWallet.address,
+          FEE_BPS,
+          owner.address
+        );
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+        await expect(
+          noWrappedNative
+            .connect(user)
+            .swapExactETHForTokensV3WithFee(0, await tokenOut.getAddress(), 500, user.address, deadline, {
+              value: ethers.parseEther("1"),
+            })
+        ).to.be.revertedWithCustomError(noWrappedNative, "WrappedNativeNotSet");
+      });
+    });
+
+    describe("Token -> native BNB (exactInputSingle, swap-then-unwrap)", function () {
+      it("delivers native BNB to `to`, net of fee", async function () {
+        const { feeRouter, user, tokenIn } = await loadFixture(deployFixture);
+        const amountIn = ONE_TOKEN;
+        const { afterFee } = computeFee(amountIn);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+        const balBefore = await ethers.provider.getBalance(user.address);
+        const tx = await feeRouter
+          .connect(user)
+          .swapExactTokensForETHV3WithFee(amountIn, 0, await tokenIn.getAddress(), 500, user.address, deadline);
+        const receipt = await tx.wait();
+        const gasCost = receipt!.gasUsed * receipt!.gasPrice;
+        const balAfter = await ethers.provider.getBalance(user.address);
+
+        // Mock rate is 1:1, so BNB received should equal `afterFee` (in wei),
+        // net of the gas this same tx spent.
+        expect(balAfter - balBefore + gasCost).to.equal(afterFee);
+      });
+    });
+
+    describe("Multi-hop native BNB paths — endpoint validation", function () {
+      it("reverts with InvalidV3Path if a BNB->token multi-hop path doesn't start with wrappedNative", async function () {
+        const { feeRouter, user, tokenIn, tokenOut } = await loadFixture(deployFixture);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+        // Wrong first token — should be `wrappedNative`, not `tokenIn`.
+        const badPath = encodeV3Path([await tokenIn.getAddress(), await tokenOut.getAddress()], [500]);
+
+        await expect(
+          feeRouter.connect(user).swapExactETHForTokensV3MultiHopWithFee(0, badPath, user.address, deadline, {
+            value: ethers.parseEther("1"),
+          })
+        ).to.be.revertedWithCustomError(feeRouter, "InvalidV3Path");
+      });
+
+      it("reverts with InvalidV3Path if a token->BNB multi-hop path doesn't end with wrappedNative", async function () {
+        const { feeRouter, user, tokenIn, tokenOut } = await loadFixture(deployFixture);
+        const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+        // Wrong last token — should be `wrappedNative`, not `tokenOut`.
+        const badPath = encodeV3Path([await tokenIn.getAddress(), await tokenOut.getAddress()], [500]);
+
+        await expect(
+          feeRouter
+            .connect(user)
+            .swapExactTokensForETHV3MultiHopWithFee(ONE_TOKEN, 0, badPath, user.address, deadline)
+        ).to.be.revertedWithCustomError(feeRouter, "InvalidV3Path");
+      });
     });
   });
 });

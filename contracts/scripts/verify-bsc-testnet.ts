@@ -47,6 +47,8 @@ async function main() {
         address,
         constructorArguments: [
             constructorArgs.pancakeRouter,
+            constructorArgs.v3Router,
+            constructorArgs.wrappedNative,
             constructorArgs.feeWallet,
             constructorArgs.feeBps,
             constructorArgs.initialOwner,

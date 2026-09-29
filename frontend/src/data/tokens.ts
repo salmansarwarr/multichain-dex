@@ -83,16 +83,52 @@ export const BSC_TESTNET_TOKENS: Token[] = [
 // than typed from memory, specifically to avoid hand-entering a wrong
 // contract address for a real mainnet token.
 //
-// KITE, APE, and COW were removed from this list (2026-09-28) after a
-// client report of wildly wrong quotes for them: the on-chain addresses
-// are correct (verified name()/symbol()/decimals()), but none of the
-// three have a PancakeSwap V2 pool against WBNB or any of our known
-// stablecoin/CAKE intermediates — factory.getPair() returns the zero
-// address for every candidate. There is no PancakeSwap V2 route to quote,
-// so listing them here just produced either a quote error or (on an
-// address collision with a stale getAmountsOut revert) a misleading
-// number. They may have real Uniswap liquidity on Ethereum/Arbitrum
-// (kept in those chains' token lists below) — this removal is BSC-only.
+// KITE, APE, and COW were removed from this list on 2026-09-28 after a
+// client report of wildly wrong quotes for them, on the assumption they
+// had no real PancakeSwap liquidity at all — true for V2 (factory.getPair()
+// returns the zero address for every candidate against WBNB or our known
+// stablecoin/CAKE intermediates), but wrong for V3: the client pushed back,
+// correctly, that KITE and APE really are swappable on PancakeSwap. A
+// follow-up check found APE has substantial real V3 liquidity directly
+// against WBNB, and KITE has real V3 liquidity against USDT — this app
+// just wasn't looking at V3 yet. Both are restored here as of 2026-09-29,
+// alongside FeeRouter.sol's new V3 swap support (see that file's header
+// comment) and useEvmQuote.ts's matching V3 quoting path.
+//
+// The V3-capable FeeRouter went live on BSC mainnet 2026-09-29 at
+// 0x5DFdFe850C613cf043c5e016b9B5A0a0415F5807 (see deployments/bsc-mainnet.json
+// and docs/deployments.md) — useEvmQuote.ts's V3 quoting reads that
+// contract's own v3Router() to confirm support before using it, so this
+// was (and remains) safe regardless of deployment timing.
+//
+// COW: initially also concluded dead on BSC — wrong. A client push-back
+// (2026-09-29, same day) turned out to be right: COW has a real, active
+// ~$60k PancakeSwap V2 pool, just not against any of WBNB/USDT/USDC/BUSD/
+// CAKE, the intermediates checked at the time. It trades against ETH
+// (Binance-Peg Ethereum Token) instead — common on BSC for an
+// Ethereum-native token like COW Protocol. 'ETH' is now in
+// SwapCard.tsx's intermediateTokens list specifically because of this, so
+// this is restored and working via that route. See that file's comment
+// for the fuller account, including the re-check that no other BSC token
+// was hiding the same gap.
+//
+// DEXE (0x6e88056e8376ae7709496ba64d37fa2f8015ce3e) removed again the same
+// day, for a different and more serious reason than the original "no
+// liquidity" removal: it DOES quote here — a PancakeSwap V3 pool (0.01%
+// tier, ~$38k reserve) against USDT gives a clean quote with no warning —
+// but that pool is stale and unarbitraged (zero 24h volume) and prices
+// DEXE at roughly 7x its real market rate. DEXE's actual liquidity/price
+// discovery has moved to Uniswap V4 and PancakeSwap's newer "Infinity"
+// AMM (confirmed via GeckoTerminal and PancakeSwap's own UI), neither of
+// which useEvmQuote.ts checks. This is NOT caught by the existing
+// price-impact/insufficient-liquidity checks: those compare a trade's
+// outcome against that *same* pool's own reserves, which can never detect
+// "this pool's own price is wrong relative to the wider market" — only
+// "this trade is large relative to this pool." A quiet wrong price with
+// no warning is worse than no route at all, so removed rather than left
+// live. Restoring this needs either Uniswap V4 / PancakeSwap Infinity
+// support, or a genuine external reference-price check — a real gap
+// worth fixing deliberately, not a quick patch.
 export const BSC_MAINNET_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -296,13 +332,6 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/12882/large/Other_200x200.png?1738782212',
   },
   {
-    address: '0x6e88056e8376ae7709496ba64d37fa2f8015ce3e',
-    symbol: 'DEXE',
-    name: 'DeXe',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/12713/large/DEXE_token_logo.png?1696512514',
-  },
-  {
     address: '0x6418c0dd099a9fda397c766304cdd918233e8847',
     symbol: 'PENGU',
     name: 'Pudgy Penguins',
@@ -352,6 +381,13 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/22457/large/btt_logo.png?1696521780',
   },
   {
+    address: '0x904567252d8f48555b7447c67dca23f0372e16be',
+    symbol: 'KITE',
+    name: 'Kite',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/70426/large/KITE-ICON.png?1762328605',
+  },
+  {
     address: '0x8b194370825e37b33373e74a41009161808c1488',
     symbol: 'VELVET',
     name: 'Velvet',
@@ -373,11 +409,25 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/13029/large/axie_infinity_logo.png?1696512817',
   },
   {
+    address: '0x8f86a15ec17cb3369d8b3e666dadbc11daa82b79',
+    symbol: 'APE',
+    name: 'ApeCoin',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/24383/large/APECOIN.png?1756551529',
+  },
+  {
     address: '0x111111111117dc0aa78b770fa6a738034120c302',
     symbol: '1INCH',
     name: '1INCH',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/13469/large/1inch-logo.jpeg?1759404663',
+  },
+  {
+    address: '0x5bfdaa3f7c28b9994b56135403bf1acea02595b0',
+    symbol: 'COW',
+    name: 'CoW Protocol',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/24384/large/CoW-token_logo.png?1719524382',
   },
   {
     address: '0x62d0a8458ed7719fdaf978fe5929c6d342b0bfce',

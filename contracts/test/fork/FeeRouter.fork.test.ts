@@ -104,6 +104,8 @@ describeOrSkip("FeeRouter — BSC mainnet fork (Phase 1 manual gate)", function 
     const FeeRouter = await ethers.getContractFactory("FeeRouter");
     const feeRouter = await FeeRouter.deploy(
       PANCAKE_ROUTER_V2,
+      ethers.ZeroAddress, // v3Router — not needed for this V2-only test
+      ethers.ZeroAddress, // wrappedNative — likewise
       feeWallet.address,
       15, // 0.15%
       deployer.address
@@ -133,5 +135,66 @@ describeOrSkip("FeeRouter — BSC mainnet fork (Phase 1 manual gate)", function 
 
     expect(feeWalletWbnbAfter - feeWalletWbnbBefore).to.equal(expectedFee);
     expect(userBusdAfter).to.be.gt(userBusdBefore); // real swap actually executed against live liquidity
+  });
+
+  // 2026-09-29 addition: proves the V3 support added to FeeRouter.sol this
+  // same day actually works against real PancakeSwap V3 liquidity — not
+  // just the mocked unit tests in test/FeeRouter.test.ts. APE was one of
+  // the tokens a client reported as "not swappable" that turned out to
+  // have real V3 (not V2) liquidity; see FeeRouter.sol's header comment.
+  it("executes a real WBNB -> APE swap through PancakeSwap V3 and confirms fee wallet gets exactly 0.15%", async function () {
+    const PANCAKE_V3_ROUTER = "0x1b81D678ffb9C0263b24A97847620C99d213eB14";
+    const APE = "0x8f86a15ec17cb3369d8b3e666dadbc11daa82b79";
+    const APE_WBNB_FEE_TIER = 2500; // deepest of APE's WBNB pools at time of writing
+
+    const [deployer, feeWallet, user] = await ethers.getSigners();
+    const amountIn = ethers.parseEther("1"); // 1 WBNB
+
+    await network.provider.request({
+      method: "hardhat_setBalance",
+      params: [user.address, ethers.toQuantity(ethers.parseEther("2"))],
+    });
+
+    const wbnb = new ethers.Contract(WBNB, WBNB_ABI, user);
+    await wbnb.deposit({ value: amountIn });
+
+    const ape = await ethers.getContractAt("IERC20", APE);
+
+    const FeeRouter = await ethers.getContractFactory("FeeRouter");
+    const feeRouter = await FeeRouter.deploy(
+      PANCAKE_ROUTER_V2,
+      PANCAKE_V3_ROUTER,
+      WBNB,
+      feeWallet.address,
+      15, // 0.15%
+      deployer.address
+    );
+
+    await wbnb.approve(await feeRouter.getAddress(), amountIn);
+
+    const feeWalletWbnbBefore = await wbnb.balanceOf(feeWallet.address);
+    const userApeBefore = await ape.balanceOf(user.address);
+
+    const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+
+    await feeRouter
+      .connect(user)
+      .swapExactTokensForTokensV3WithFee(
+        amountIn,
+        0, // no slippage protection needed for this smoke test
+        WBNB,
+        APE,
+        APE_WBNB_FEE_TIER,
+        user.address,
+        deadline
+      );
+
+    const feeWalletWbnbAfter = await wbnb.balanceOf(feeWallet.address);
+    const userApeAfter = await ape.balanceOf(user.address);
+
+    const expectedFee = (amountIn * 15n) / 10_000n;
+
+    expect(feeWalletWbnbAfter - feeWalletWbnbBefore).to.equal(expectedFee);
+    expect(userApeAfter).to.be.gt(userApeBefore); // real V3 swap actually executed against live liquidity
   });
 });

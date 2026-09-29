@@ -5,9 +5,11 @@ import { V2RouterABI } from '../abis/V2Router';
 import { V2FactoryABI, V2PairABI } from '../abis/V2FactoryPair';
 import { FeeRouterABI } from '../abis/FeeRouter';
 import { EthFeeRouterABI } from '../abis/EthFeeRouter';
+import { PancakeV3QuoterABI } from '../abis/PancakeV3Quoter';
 import { NATIVE_TOKEN_ADDRESS } from '../data/tokens';
 import { getFeeRouterAddress, contracts } from '../config/contracts';
 import { getMinNativeReserveWei } from '../config/liquidity';
+import { PANCAKE_V3_QUOTER_BSC_MAINNET, PANCAKE_V3_FEE_TIERS } from '../config/pancakeV3';
 import { withRpcRetry } from './rpcRetry';
 
 // Quote reads are single quick calls, not a chunked scan, so a couple of
@@ -63,6 +65,16 @@ export function useEvmQuote(
   // can still compute a low impact percentage, so that check alone won't
   // catch it. See config/liquidity.ts for the full rationale.
   const [insufficientLiquidity, setInsufficientLiquidity] = useState(false);
+  // Which router version `quote`/`path` actually came from — set only on
+  // BSC mainnet, only once the configured FeeRouter contract's own
+  // `v3Router()` reads non-zero (i.e. the deployed contract actually has
+  // the V3 swap functions; the currently-live contract at time of writing
+  // doesn't, so this stays 'v2' in production until it's redeployed — see
+  // FeeRouter.sol's 2026-09-29 V3 addition). useSwap.ts needs this to call
+  // the right contract function; when 'v3', `v3Fee` carries the winning
+  // pool's fee tier, required by that function's `fee` param.
+  const [quoteVersion, setQuoteVersion] = useState<'v2' | 'v3'>('v2');
+  const [v3Fee, setV3Fee] = useState<number | null>(null);
   const publicClient = usePublicClient({ chainId });
   // Stable primitive for the effect's dependency array — intermediateTokens
   // is an array, and callers commonly pass a fresh one each render.
@@ -79,6 +91,8 @@ export function useEvmQuote(
         setPriceImpactBps(null);
         setInsufficientLiquidity(false);
         setPath(null);
+        setQuoteVersion('v2');
+        setV3Fee(null);
         return;
       }
 
@@ -218,24 +232,95 @@ export function useEvmQuote(
           (a): a is { path: Address[]; out: bigint; err: null } => a.out !== null
         );
 
-        if (successes.length === 0) {
+        // --- PancakeSwap V3 candidate (BSC mainnet only, direct pair
+        // only — see config/pancakeV3.ts for why a single hop already
+        // covers every case found so far). Gated on the *configured*
+        // FeeRouter contract's own v3Router() actually reading non-zero,
+        // so this stays fully inert against the pre-2026-09-29 mainnet
+        // contract (no such function at all — the read below just fails
+        // and falls through to V2-only) and only activates once that
+        // contract is redeployed with V3 support — see FeeRouter.sol.
+        let v3Best: { out: bigint; fee: number } | null = null;
+        if (isBscFamily && chainId === contracts.bscMainnet.chainId) {
+          try {
+            const onChainV3Router = await withRpcRetry(
+              () => publicClient.readContract({
+                address: feeRouterAddress,
+                abi: FeeRouterABI,
+                functionName: 'v3Router',
+              }),
+              MAX_RETRIES,
+              BASE_DELAY_MS,
+            ) as Address;
+
+            if (onChainV3Router !== '0x0000000000000000000000000000000000000000') {
+              const v3Attempts = await Promise.all(
+                PANCAKE_V3_FEE_TIERS.map(async (feeTier) => {
+                  try {
+                    const result = await withRpcRetry(
+                      () => publicClient.readContract({
+                        address: PANCAKE_V3_QUOTER_BSC_MAINNET,
+                        abi: PancakeV3QuoterABI,
+                        functionName: 'quoteExactInputSingle',
+                        args: [{
+                          tokenIn: directPath[0],
+                          tokenOut: directPath[1],
+                          amountIn: amountInAfterFee,
+                          fee: feeTier,
+                          sqrtPriceLimitX96: 0n,
+                        }],
+                      }),
+                      MAX_RETRIES,
+                      BASE_DELAY_MS,
+                    ) as readonly [bigint, bigint, number, bigint];
+                    return { fee: feeTier as number, out: result[0] as bigint | null };
+                  } catch {
+                    return { fee: feeTier as number, out: null as bigint | null };
+                  }
+                })
+              );
+
+              const v3Successes = v3Attempts.filter(
+                (a): a is { fee: number; out: bigint } => a.out !== null
+              );
+              if (v3Successes.length > 0) {
+                v3Best = v3Successes.reduce((a, b) => (b.out > a.out ? b : a));
+              }
+            }
+          } catch {
+            // v3Router() reverting/erroring (e.g. the currently-deployed
+            // contract predates this function entirely) just means V3
+            // isn't available yet — fall through to V2-only.
+          }
+        }
+
+        if (successes.length === 0 && !v3Best) {
           throw attempts[0].err ?? new Error("No route found for this pair");
         }
 
-        const best = successes.reduce((a, b) => (b.out > a.out ? b : a));
+        const v2Best = successes.length > 0 ? successes.reduce((a, b) => (b.out > a.out ? b : a)) : null;
+
+        // Whichever version gives the better raw output wins outright —
+        // same "try every candidate, keep the best" principle as the V2
+        // direct-vs-intermediate route-shopping above, just extended
+        // across router versions too.
+        const v3Wins = v3Best !== null && (v2Best === null || v3Best.out > v2Best.out);
+        const winnerVersion: 'v2' | 'v3' = v3Wins ? 'v3' : 'v2';
         // best.out is the pool's raw output, pre tokenOut tax — kept as-is
         // below for the price-impact comparison (a pure pool-thinness
         // signal), separate from finalOut, which additionally accounts for
         // the tax the recipient actually pays on the pool -> recipient
         // transfer and is what the UI quotes / amountOutMin is derived from.
-        const actualOut = best.out;
+        const actualOut = v3Wins ? v3Best!.out : v2Best!.out;
         const tokenOutTax = BigInt(tokenOutTaxBps ?? 0);
         const finalOut = actualOut - (actualOut * tokenOutTax) / 10000n;
-        const path = best.path;
+        const path = v3Wins ? directPath as Address[] : v2Best!.path;
 
         if (active) {
           setQuote(finalOut);
           setPath(path);
+          setQuoteVersion(winnerVersion);
+          setV3Fee(v3Wins ? v3Best!.fee : null);
         }
 
         // Price impact vs. the winning path's current spot price — a real
@@ -246,99 +331,113 @@ export function useEvmQuote(
         // 2-hop route through an intermediate is judged the same way as a
         // direct one. Compute best-effort; never let a failure here block
         // the quote itself.
-        try {
-          const factoryAddress = await withRpcRetry(
-            () => publicClient.readContract({
-              address: routerAddress,
-              abi: V2RouterABI,
-              functionName: 'factory',
-            }),
-            MAX_RETRIES,
-            BASE_DELAY_MS,
-          ) as Address;
-
-          let idealAmount = amountInAfterFee;
-          let impactKnown = true;
-          const minNativeReserve = getMinNativeReserveWei(chainId);
-          let hitDeadPool = false;
-
-          for (let i = 0; i < path.length - 1 && impactKnown; i++) {
-            const hopIn = path[i];
-            const hopOut = path[i + 1];
-
-            const pairAddress = await withRpcRetry(
+        //
+        // V2-reserve-shaped only: a V3 pool's concentrated liquidity has
+        // no equivalent "reserveIn/reserveOut" pair to walk this way, so a
+        // V3-sourced quote skips this and reports both as unknown rather
+        // than reusing V2 constant-product math on a shape it doesn't fit
+        // — a real gap (V3 pools can be just as dead as a V2 one), not
+        // yet covered here; flagged as a followup, not silently assumed.
+        if (v3Wins) {
+          if (active) {
+            setPriceImpactBps(null);
+            setInsufficientLiquidity(false);
+          }
+        } else {
+          try {
+            const factoryAddress = await withRpcRetry(
               () => publicClient.readContract({
-                address: factoryAddress,
-                abi: V2FactoryABI,
-                functionName: 'getPair',
-                args: [hopIn, hopOut],
+                address: routerAddress,
+                abi: V2RouterABI,
+                functionName: 'factory',
               }),
               MAX_RETRIES,
               BASE_DELAY_MS,
             ) as Address;
 
-            if (pairAddress === '0x0000000000000000000000000000000000000000') {
-              impactKnown = false;
-              break;
-            }
+            let idealAmount = amountInAfterFee;
+            let impactKnown = true;
+            const minNativeReserve = getMinNativeReserveWei(chainId);
+            let hitDeadPool = false;
 
-            const [reserves, token0] = await Promise.all([
-              withRpcRetry(
-                () => publicClient.readContract({ address: pairAddress, abi: V2PairABI, functionName: 'getReserves' }),
+            for (let i = 0; i < path.length - 1 && impactKnown; i++) {
+              const hopIn = path[i];
+              const hopOut = path[i + 1];
+
+              const pairAddress = await withRpcRetry(
+                () => publicClient.readContract({
+                  address: factoryAddress,
+                  abi: V2FactoryABI,
+                  functionName: 'getPair',
+                  args: [hopIn, hopOut],
+                }),
                 MAX_RETRIES,
                 BASE_DELAY_MS,
-              ) as Promise<readonly [bigint, bigint, number]>,
-              withRpcRetry(
-                () => publicClient.readContract({ address: pairAddress, abi: V2PairABI, functionName: 'token0' }),
-                MAX_RETRIES,
-                BASE_DELAY_MS,
-              ) as Promise<Address>,
-            ]);
+              ) as Address;
 
-            const [reserve0, reserve1] = reserves;
-            const hopInIsToken0 = token0.toLowerCase() === hopIn.toLowerCase();
-            const reserveIn = hopInIsToken0 ? reserve0 : reserve1;
-            const reserveOut = hopInIsToken0 ? reserve1 : reserve0;
-
-            if (reserveIn <= 0n || reserveOut <= 0n) {
-              impactKnown = false;
-              break;
-            }
-
-            // Dead-pool floor, independent of this trade's size — see
-            // config/liquidity.ts. Only meaningful on the hop's
-            // wrapped-native side; the other side is an arbitrary token
-            // with its own decimals/valuation, not comparable to a wei
-            // threshold.
-            if (minNativeReserve !== null) {
-              if (hopIn.toLowerCase() === wethAddress.toLowerCase() && reserveIn < minNativeReserve) {
-                hitDeadPool = true;
-              } else if (hopOut.toLowerCase() === wethAddress.toLowerCase() && reserveOut < minNativeReserve) {
-                hitDeadPool = true;
+              if (pairAddress === '0x0000000000000000000000000000000000000000') {
+                impactKnown = false;
+                break;
               }
+
+              const [reserves, token0] = await Promise.all([
+                withRpcRetry(
+                  () => publicClient.readContract({ address: pairAddress, abi: V2PairABI, functionName: 'getReserves' }),
+                  MAX_RETRIES,
+                  BASE_DELAY_MS,
+                ) as Promise<readonly [bigint, bigint, number]>,
+                withRpcRetry(
+                  () => publicClient.readContract({ address: pairAddress, abi: V2PairABI, functionName: 'token0' }),
+                  MAX_RETRIES,
+                  BASE_DELAY_MS,
+                ) as Promise<Address>,
+              ]);
+
+              const [reserve0, reserve1] = reserves;
+              const hopInIsToken0 = token0.toLowerCase() === hopIn.toLowerCase();
+              const reserveIn = hopInIsToken0 ? reserve0 : reserve1;
+              const reserveOut = hopInIsToken0 ? reserve1 : reserve0;
+
+              if (reserveIn <= 0n || reserveOut <= 0n) {
+                impactKnown = false;
+                break;
+              }
+
+              // Dead-pool floor, independent of this trade's size — see
+              // config/liquidity.ts. Only meaningful on the hop's
+              // wrapped-native side; the other side is an arbitrary token
+              // with its own decimals/valuation, not comparable to a wei
+              // threshold.
+              if (minNativeReserve !== null) {
+                if (hopIn.toLowerCase() === wethAddress.toLowerCase() && reserveIn < minNativeReserve) {
+                  hitDeadPool = true;
+                } else if (hopOut.toLowerCase() === wethAddress.toLowerCase() && reserveOut < minNativeReserve) {
+                  hitDeadPool = true;
+                }
+              }
+
+              // No-slippage reference price from reserves *before* this
+              // trade, compounded across hops so both sides are on equal
+              // footing with the real (slippage-affected) quote.
+              idealAmount = (idealAmount * reserveOut) / reserveIn;
             }
 
-            // No-slippage reference price from reserves *before* this
-            // trade, compounded across hops so both sides are on equal
-            // footing with the real (slippage-affected) quote.
-            idealAmount = (idealAmount * reserveOut) / reserveIn;
-          }
-
-          if (impactKnown && idealAmount > 0n && active) {
-            const impact = idealAmount > actualOut
-              ? Number(((idealAmount - actualOut) * 10000n) / idealAmount)
-              : 0;
-            setPriceImpactBps(impact);
-          } else if (active) {
-            setPriceImpactBps(null);
-          }
-          if (active) setInsufficientLiquidity(hitDeadPool);
-        } catch {
-          // Best-effort only — an RPC hiccup here shouldn't hide a
-          // perfectly good quote.
-          if (active) {
-            setPriceImpactBps(null);
-            setInsufficientLiquidity(false);
+            if (impactKnown && idealAmount > 0n && active) {
+              const impact = idealAmount > actualOut
+                ? Number(((idealAmount - actualOut) * 10000n) / idealAmount)
+                : 0;
+              setPriceImpactBps(impact);
+            } else if (active) {
+              setPriceImpactBps(null);
+            }
+            if (active) setInsufficientLiquidity(hitDeadPool);
+          } catch {
+            // Best-effort only — an RPC hiccup here shouldn't hide a
+            // perfectly good quote.
+            if (active) {
+              setPriceImpactBps(null);
+              setInsufficientLiquidity(false);
+            }
           }
         }
       } catch (err: any) {
@@ -349,6 +448,8 @@ export function useEvmQuote(
           setPath(null);
           setPriceImpactBps(null);
           setInsufficientLiquidity(false);
+          setQuoteVersion('v2');
+          setV3Fee(null);
         }
       } finally {
         if (active) {
@@ -365,5 +466,5 @@ export function useEvmQuote(
     };
   }, [chainId, tokenIn, tokenOut, amountIn, intermediateTokensKey, publicClient, tokenInTaxBps, tokenOutTaxBps]);
 
-  return { quote, loading, error, priceImpactBps, insufficientLiquidity, path };
+  return { quote, loading, error, priceImpactBps, insufficientLiquidity, path, quoteVersion, v3Fee };
 }

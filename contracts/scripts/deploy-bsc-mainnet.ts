@@ -2,10 +2,12 @@
  * deploy-bsc-mainnet.ts
  *
  * Deploys FeeRouter to BSC Mainnet (chain ID 56), pointed at the real
- * PancakeSwap Router V2. THIS SPENDS REAL BNB AND HANDLES REAL FUNDS ONCE
- * LIVE — do not run this until:
+ * PancakeSwap Router V2 *and* (added 2026-09-29) PancakeSwap's V3
+ * SwapRouter. THIS SPENDS REAL BNB AND HANDLES REAL FUNDS ONCE LIVE — do
+ * not run this until:
  *   1. The full test suite passes (`npx hardhat test`), including the
- *      fee-on-transfer cases needed for tax tokens like Alfat.
+ *      fee-on-transfer cases needed for tax tokens like Alfat and the
+ *      "PancakeSwap V3 support" cases.
  *   2. `npm run audit:slither` shows zero High/Critical findings.
  *   3. You have a considered answer for BSC_MAINNET_OWNER_ADDRESS below —
  *      ideally a multisig (e.g. Gnosis Safe), not a single hot wallet.
@@ -25,6 +27,18 @@
  *   0x10ED43C718714eb63d5aA57B78B54704E256024E
  *   (verified live via eth_getCode against BSC mainnet RPC before writing
  *   this script — real bytecode confirmed present, not assumed)
+ *
+ * PancakeSwap V3 SwapRouter on BSC Mainnet:
+ *   0x1b81D678ffb9C0263b24A97847620C99d213eB14
+ *   (cross-checked against the verified ABI served by Sourcify for chain
+ *   56 at this address — exactInputSingle/exactInput's param structs match
+ *   IPancakeV3SwapRouter.sol field-for-field, not assumed from a GitHub
+ *   source tree alone)
+ *
+ * WBNB on BSC Mainnet:
+ *   0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
+ *   (same address already read live via PancakeSwap Router's own WETH()
+ *   call elsewhere in this codebase — see frontend/src/hooks/useEvmQuote.ts)
  */
 
 import { ethers, network } from "hardhat";
@@ -33,6 +47,13 @@ import * as path from "path";
 
 // PancakeSwap Router V2 on BSC Mainnet — confirmed live on-chain.
 const PANCAKE_ROUTER_BSC_MAINNET = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
+
+// PancakeSwap V3 SwapRouter on BSC Mainnet — confirmed against Sourcify's
+// verified ABI for this exact address (see header comment).
+const PANCAKE_V3_ROUTER_BSC_MAINNET = "0x1b81D678ffb9C0263b24A97847620C99d213eB14";
+
+// WBNB on BSC Mainnet.
+const WBNB_BSC_MAINNET = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
 // Fee in basis points: 15 = 0.15%
 const FEE_BPS = 15;
@@ -76,6 +97,8 @@ async function main() {
   console.log(`Balance   : ${ethers.formatEther(await ethers.provider.getBalance(deployer.address))} BNB`);
   console.log(`Network   : ${networkName} (chain ${(await ethers.provider.getNetwork()).chainId})`);
   console.log(`Router    : ${PANCAKE_ROUTER_BSC_MAINNET}`);
+  console.log(`V3 Router : ${PANCAKE_V3_ROUTER_BSC_MAINNET}`);
+  console.log(`WBNB      : ${WBNB_BSC_MAINNET}`);
   console.log(`Fee wallet: ${feeWallet}`);
   console.log(`Owner     : ${owner}`);
   console.log(`Fee bps   : ${FEE_BPS} (${FEE_BPS / 100}%)`);
@@ -86,6 +109,8 @@ async function main() {
   console.log("Deploying FeeRouter...");
   const feeRouter = await FeeRouterFactory.deploy(
     PANCAKE_ROUTER_BSC_MAINNET,
+    PANCAKE_V3_ROUTER_BSC_MAINNET,
+    WBNB_BSC_MAINNET,
     feeWallet,
     FEE_BPS,
     owner
@@ -93,7 +118,30 @@ async function main() {
 
   console.log(`Tx hash   : ${feeRouter.deploymentTransaction()?.hash}`);
   console.log("Waiting for confirmations (5)...");
-  await feeRouter.deploymentTransaction()?.wait(5);
+  try {
+    await feeRouter.deploymentTransaction()?.wait(5);
+  } catch (waitErr: any) {
+    // Some BSC RPC responses return `"to": ""` instead of `"to": null` on a
+    // contract-creation transaction/receipt; ethers v6's strict address
+    // parser throws on that while re-fetching the tx to track
+    // confirmations. This is a client-side formatting bug in that fetch —
+    // it does NOT mean the deployment failed. The transaction was already
+    // broadcast and (per BSC's ~3s blocks) is very likely already mined by
+    // this point; `contractAddress` below is computed locally from
+    // sender+nonce and needs no RPC round-trip, so it's safe to use even
+    // after this catch. Verify independently once this script finishes:
+    // `eth_getTransactionReceipt` for the tx hash above should show
+    // status "0x1", and scripts/smoke-test-bsc-mainnet.ts (or a plain
+    // eth_call against a getter like owner()) should read real values
+    // back from `contractAddress`, not a revert (no code at that address).
+    console.warn(
+      "\n⚠️  Couldn't confirm via wait() — likely the known ethers/RPC " +
+        "'to' formatting bug on contract-creation receipts, not a failed " +
+        `deployment. Details: ${waitErr.shortMessage || waitErr.message}\n` +
+        "Continuing to write the deployment record; verify the tx hash " +
+        "below on BscScan before treating this deployment as confirmed.\n"
+    );
+  }
 
   const contractAddress = await feeRouter.getAddress();
   const deployTxHash = feeRouter.deploymentTransaction()?.hash ?? "";
@@ -117,6 +165,8 @@ async function main() {
     deployedAt: new Date().toISOString(),
     constructorArgs: {
       pancakeRouter: PANCAKE_ROUTER_BSC_MAINNET,
+      v3Router: PANCAKE_V3_ROUTER_BSC_MAINNET,
+      wrappedNative: WBNB_BSC_MAINNET,
       feeWallet,
       feeBps: FEE_BPS,
       initialOwner: owner,

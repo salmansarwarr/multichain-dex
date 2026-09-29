@@ -114,9 +114,24 @@ export function SwapCard() {
     // the same input. Alfat's direct WBNB pool has zero liquidity and
     // reverts outright, but its CAKE pool is real and liquid. The best
     // output across all candidates wins.
+    //
+    // 'ETH' (Binance-Peg Ethereum Token) added 2026-09-29 after a client
+    // report that COW — which a prior check had wrongly concluded had no
+    // BSC liquidity anywhere — actually trades on PancakeSwap. It does:
+    // a real, active ~$60k V2 pool, but paired against bridged ETH, not
+    // any of the tokens originally in this list. Common on BSC for
+    // Ethereum-ecosystem tokens (COW Protocol is Ethereum-native) to hold
+    // their real liquidity against ETH rather than BNB/a stablecoin — this
+    // list was missing that base entirely. Re-checked DEXE and M/MemeCore
+    // (the two BSC tokens still gated on insufficient liquidity at time of
+    // writing) against ETH too — neither gained a route; still genuinely
+    // thin/dead. A broader sweep found 27 of the other 52 BSC tokens also
+    // get *some* route via ETH, expected and harmless: those already had a
+    // working route elsewhere, and the best-output-wins logic below can
+    // only ever benefit from an extra candidate, never regress from one.
     const intermediateTokens = useMemo(
         () =>
-            ["WBNB", "WETH", "USDT", "USDC", "BUSD", "DAI", "CAKE"]
+            ["WBNB", "WETH", "ETH", "USDT", "USDC", "BUSD", "DAI", "CAKE"]
                 .map((symbol) => tokens.find((t) => t.symbol === symbol)?.address)
                 .filter((address): address is string => !!address),
         [tokens],
@@ -128,6 +143,8 @@ export function SwapCard() {
         priceImpactBps,
         insufficientLiquidity,
         path: evmQuotePath,
+        quoteVersion,
+        v3Fee,
     } = useEvmQuote(
         expectedChainId,
         tokenIn?.address,
@@ -194,6 +211,8 @@ export function SwapCard() {
                 evmAddress!,
                 evmQuotePath,
                 tokenIn.isFeeOnTransfer || tokenOut.isFeeOnTransfer,
+                quoteVersion,
+                v3Fee,
             );
         }
     };

@@ -65,7 +65,19 @@ async function main() {
 
   console.log(`Tx hash  : ${ethFeeRouter.deploymentTransaction()?.hash}`);
   console.log("Waiting for confirmations (5)...");
-  await ethFeeRouter.deploymentTransaction()?.wait(5);
+  try {
+    await ethFeeRouter.deploymentTransaction()?.wait(5);
+  } catch (waitErr: any) {
+    // See deploy-bsc-mainnet.ts's matching catch block for the full
+    // explanation — some RPC responses return `"to": ""` instead of
+    // `"to": null` on a contract-creation receipt, which ethers v6's
+    // strict parser rejects while polling for confirmations. Not a failed
+    // deployment; `contractAddress` below needs no RPC round-trip.
+    console.warn(
+      `\n⚠️  Couldn't confirm via wait() — likely an RPC/ethers formatting bug, not a failed deployment. Details: ${waitErr.shortMessage || waitErr.message}\n` +
+        "Continuing to write the deployment record; verify the tx hash below on Etherscan.\n"
+    );
+  }
 
   const contractAddress = await ethFeeRouter.getAddress();
   const deployTxHash = ethFeeRouter.deploymentTransaction()?.hash ?? "";

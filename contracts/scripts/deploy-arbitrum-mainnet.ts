@@ -95,7 +95,23 @@ async function main() {
 
   console.log(`Tx hash   : ${ethFeeRouter.deploymentTransaction()?.hash}`);
   console.log("Waiting for confirmations (5)...");
-  await ethFeeRouter.deploymentTransaction()?.wait(5);
+  try {
+    await ethFeeRouter.deploymentTransaction()?.wait(5);
+  } catch (waitErr: any) {
+    // Some RPC responses return `"to": ""` instead of `"to": null` on a
+    // contract-creation receipt; ethers v6's strict address parser throws
+    // while re-fetching the tx to track confirmations. Seen live on a BSC
+    // mainnet deploy (2026-09-29) where the deployment itself had already
+    // succeeded — this is a client-side fetch bug, not a failed
+    // deployment. `contractAddress` below needs no RPC round-trip
+    // (computed locally from sender+nonce), so it's safe to use anyway;
+    // verify the tx hash on Arbiscan before treating this as confirmed.
+    console.warn(
+      "\n⚠️  Couldn't confirm via wait() — likely an RPC/ethers 'to' " +
+        `formatting bug on contract-creation receipts, not a failed deployment. Details: ${waitErr.shortMessage || waitErr.message}\n` +
+        "Continuing to write the deployment record; verify the tx hash below on Arbiscan.\n"
+    );
+  }
 
   const contractAddress = await ethFeeRouter.getAddress();
   const deployTxHash = ethFeeRouter.deploymentTransaction()?.hash ?? "";
