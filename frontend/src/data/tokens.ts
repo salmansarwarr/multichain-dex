@@ -129,6 +129,22 @@ export const BSC_TESTNET_TOKENS: Token[] = [
 // live. Restoring this needs either Uniswap V4 / PancakeSwap Infinity
 // support, or a genuine external reference-price check — a real gap
 // worth fixing deliberately, not a quick patch.
+//
+// 2026-09-30: useEvmQuote.ts gained V3 multi-hop quoting (through the same
+// known-liquid intermediates as V2's route-shopping), after a client
+// report that PENGU quoted ~85x off — its only deep PancakeSwap V3 pool is
+// PENGU/USDT, not PENGU/WBNB directly, and this app previously only tried
+// direct V3 pairs. That fix also corrected USDE, M/MemeCore, XTZ, and ONT
+// (all had the same shape of gap: real liquidity behind a stablecoin V3
+// pool this app wasn't checking) without any code changes specific to
+// them. KITE was re-checked the same way and is NOT fixed by it: its only
+// deep pool (~$1.6M) is on PancakeSwap's newer "Infinity" CLMM, not
+// classic V2 or V3 — every classic-venue pool for KITE has under $30 of
+// real liquidity. Same underlying problem as DEXE above (liquidity moved
+// to a venue this app doesn't integrate at all), so removed again for the
+// same reason, one day after being restored above on the (in hindsight,
+// likely mistaken — possibly an Infinity pool momentarily misread as V3)
+// claim that it had real V3 liquidity.
 export const BSC_MAINNET_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -379,13 +395,6 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     name: 'BitTorrent',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/22457/large/btt_logo.png?1696521780',
-  },
-  {
-    address: '0x904567252d8f48555b7447c67dca23f0372e16be',
-    symbol: 'KITE',
-    name: 'Kite',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/70426/large/KITE-ICON.png?1762328605',
   },
   {
     address: '0x8b194370825e37b33373e74a41009161808c1488',

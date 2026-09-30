@@ -145,6 +145,7 @@ export function SwapCard() {
         path: evmQuotePath,
         quoteVersion,
         v3Fee,
+        v3Path,
     } = useEvmQuote(
         expectedChainId,
         tokenIn?.address,
@@ -213,6 +214,7 @@ export function SwapCard() {
                 tokenIn.isFeeOnTransfer || tokenOut.isFeeOnTransfer,
                 quoteVersion,
                 v3Fee,
+                v3Path,
             );
         }
     };

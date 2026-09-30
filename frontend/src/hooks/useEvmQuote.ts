@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePublicClient } from 'wagmi';
-import { Address } from 'viem';
+import { Address, encodePacked } from 'viem';
 import { V2RouterABI } from '../abis/V2Router';
 import { V2FactoryABI, V2PairABI } from '../abis/V2FactoryPair';
 import { FeeRouterABI } from '../abis/FeeRouter';
@@ -72,9 +72,18 @@ export function useEvmQuote(
   // doesn't, so this stays 'v2' in production until it's redeployed — see
   // FeeRouter.sol's 2026-09-29 V3 addition). useSwap.ts needs this to call
   // the right contract function; when 'v3', `v3Fee` carries the winning
-  // pool's fee tier, required by that function's `fee` param.
-  const [quoteVersion, setQuoteVersion] = useState<'v2' | 'v3'>('v2');
+  // pool's fee tier, required by that function's `fee` param. When
+  // 'v3-multihop', `v3Path` (not `v3Fee`) carries the pre-encoded 2-hop
+  // route, required by the *V3MultiHopWithFee function's `v3Path` param —
+  // added 2026-09-30 after PENGU quoted ~85x off with zero warning: it has
+  // no meaningful direct WBNB pool on PancakeSwap V3 at all, only a deep
+  // one against USDT, so only a multi-hop quote through a stablecoin
+  // intermediate (mirroring V2's direct-vs-intermediate route-shopping
+  // below) finds the real price. FeeRouter.sol already had the multi-hop
+  // swap functions deployed; only the quoting side was missing.
+  const [quoteVersion, setQuoteVersion] = useState<'v2' | 'v3' | 'v3-multihop'>('v2');
   const [v3Fee, setV3Fee] = useState<number | null>(null);
+  const [v3Path, setV3Path] = useState<`0x${string}` | null>(null);
   const publicClient = usePublicClient({ chainId });
   // Stable primitive for the effect's dependency array — intermediateTokens
   // is an array, and callers commonly pass a fresh one each render.
@@ -93,6 +102,7 @@ export function useEvmQuote(
         setPath(null);
         setQuoteVersion('v2');
         setV3Fee(null);
+        setV3Path(null);
         return;
       }
 
@@ -232,15 +242,14 @@ export function useEvmQuote(
           (a): a is { path: Address[]; out: bigint; err: null } => a.out !== null
         );
 
-        // --- PancakeSwap V3 candidate (BSC mainnet only, direct pair
-        // only — see config/pancakeV3.ts for why a single hop already
-        // covers every case found so far). Gated on the *configured*
-        // FeeRouter contract's own v3Router() actually reading non-zero,
-        // so this stays fully inert against the pre-2026-09-29 mainnet
-        // contract (no such function at all — the read below just fails
-        // and falls through to V2-only) and only activates once that
+        // --- PancakeSwap V3 candidates (BSC mainnet only). Gated on the
+        // *configured* FeeRouter contract's own v3Router() actually reading
+        // non-zero, so this stays fully inert against the pre-2026-09-29
+        // mainnet contract (no such function at all — the read below just
+        // fails and falls through to V2-only) and only activates once that
         // contract is redeployed with V3 support — see FeeRouter.sol.
         let v3Best: { out: bigint; fee: number } | null = null;
+        let v3MultiHopBest: { out: bigint; mid: Address; path: `0x${string}` } | null = null;
         if (isBscFamily && chainId === contracts.bscMainnet.chainId) {
           try {
             const onChainV3Router = await withRpcRetry(
@@ -286,6 +295,70 @@ export function useEvmQuote(
               if (v3Successes.length > 0) {
                 v3Best = v3Successes.reduce((a, b) => (b.out > a.out ? b : a));
               }
+
+              // --- V3 multi-hop candidate, through the same known-liquid
+              // intermediates as V2's route-shopping above. Some tokens
+              // have no meaningful direct WBNB pool on PancakeSwap V3 at
+              // all (or one that exists but is nearly empty), only a real
+              // one against a stablecoin — e.g. PENGU's only deep
+              // PancakeSwap V3 pool is PENGU/USDT (~$110k), not PENGU/WBNB
+              // (a few dollars on an unrelated CLMM venue this app doesn't
+              // support). A single quoteExactInput(path) call per fee-tier
+              // combo simulates the real compounded-across-hops swap
+              // directly (not an estimate from separate legs), so this
+              // tries every {intermediate x fee1 x fee2} combination and
+              // keeps whichever succeeds with the best output — same
+              // "try every candidate" approach as everywhere else in this
+              // file, just extended to 2-hop V3 paths too.
+              const multiHopCandidates: { mid: Address; fee1: number; fee2: number }[] = [];
+              const seenMultiHopMid = new Set<string>();
+              for (const intermediateToken of intermediateTokens ?? []) {
+                const key = intermediateToken.toLowerCase();
+                if (
+                  key === directPath[0].toLowerCase() ||
+                  key === directPath[1].toLowerCase() ||
+                  seenMultiHopMid.has(key)
+                ) {
+                  continue;
+                }
+                seenMultiHopMid.add(key);
+                for (const fee1 of PANCAKE_V3_FEE_TIERS) {
+                  for (const fee2 of PANCAKE_V3_FEE_TIERS) {
+                    multiHopCandidates.push({ mid: intermediateToken as Address, fee1, fee2 });
+                  }
+                }
+              }
+
+              const multiHopAttempts = await Promise.all(
+                multiHopCandidates.map(async ({ mid, fee1, fee2 }) => {
+                  try {
+                    const candidatePath = encodePacked(
+                      ['address', 'uint24', 'address', 'uint24', 'address'],
+                      [directPath[0], fee1, mid, fee2, directPath[1]]
+                    );
+                    const result = await withRpcRetry(
+                      () => publicClient.readContract({
+                        address: PANCAKE_V3_QUOTER_BSC_MAINNET,
+                        abi: PancakeV3QuoterABI,
+                        functionName: 'quoteExactInput',
+                        args: [candidatePath, amountInAfterFee],
+                      }),
+                      MAX_RETRIES,
+                      BASE_DELAY_MS,
+                    ) as readonly [bigint, readonly bigint[], readonly number[], bigint];
+                    return { mid, path: candidatePath, out: result[0] as bigint | null };
+                  } catch {
+                    return { mid, path: null, out: null as bigint | null };
+                  }
+                })
+              );
+
+              const multiHopSuccesses = multiHopAttempts.filter(
+                (a): a is { mid: Address; path: `0x${string}`; out: bigint } => a.out !== null && a.path !== null
+              );
+              if (multiHopSuccesses.length > 0) {
+                v3MultiHopBest = multiHopSuccesses.reduce((a, b) => (b.out > a.out ? b : a));
+              }
             }
           } catch {
             // v3Router() reverting/erroring (e.g. the currently-deployed
@@ -294,33 +367,43 @@ export function useEvmQuote(
           }
         }
 
-        if (successes.length === 0 && !v3Best) {
+        if (successes.length === 0 && !v3Best && !v3MultiHopBest) {
           throw attempts[0].err ?? new Error("No route found for this pair");
         }
 
         const v2Best = successes.length > 0 ? successes.reduce((a, b) => (b.out > a.out ? b : a)) : null;
 
-        // Whichever version gives the better raw output wins outright —
-        // same "try every candidate, keep the best" principle as the V2
-        // direct-vs-intermediate route-shopping above, just extended
-        // across router versions too.
-        const v3Wins = v3Best !== null && (v2Best === null || v3Best.out > v2Best.out);
-        const winnerVersion: 'v2' | 'v3' = v3Wins ? 'v3' : 'v2';
+        // Whichever version — and, within V3, whichever of direct/multi-hop
+        // — gives the better raw output wins outright. Same "try every
+        // candidate, keep the best" principle as the V2 direct-vs-
+        // intermediate route-shopping above, just extended across router
+        // versions (and, for V3, hop counts) too.
+        const v3DirectWins = v3Best !== null && (v3MultiHopBest === null || v3Best.out >= v3MultiHopBest.out);
+        const v3Overall = v3DirectWins ? v3Best : v3MultiHopBest;
+        const v3Wins = v3Overall !== null && (v2Best === null || v3Overall.out > v2Best.out);
+        const winnerVersion: 'v2' | 'v3' | 'v3-multihop' = !v3Wins
+          ? 'v2'
+          : v3DirectWins ? 'v3' : 'v3-multihop';
         // best.out is the pool's raw output, pre tokenOut tax — kept as-is
         // below for the price-impact comparison (a pure pool-thinness
         // signal), separate from finalOut, which additionally accounts for
         // the tax the recipient actually pays on the pool -> recipient
         // transfer and is what the UI quotes / amountOutMin is derived from.
-        const actualOut = v3Wins ? v3Best!.out : v2Best!.out;
+        const actualOut = v3Wins ? v3Overall!.out : v2Best!.out;
         const tokenOutTax = BigInt(tokenOutTaxBps ?? 0);
         const finalOut = actualOut - (actualOut * tokenOutTax) / 10000n;
-        const path = v3Wins ? directPath as Address[] : v2Best!.path;
+        const path = !v3Wins
+          ? v2Best!.path
+          : winnerVersion === 'v3-multihop'
+            ? [directPath[0], v3MultiHopBest!.mid, directPath[1]] as Address[]
+            : directPath as Address[];
 
         if (active) {
           setQuote(finalOut);
           setPath(path);
           setQuoteVersion(winnerVersion);
-          setV3Fee(v3Wins ? v3Best!.fee : null);
+          setV3Fee(winnerVersion === 'v3' ? v3Best!.fee : null);
+          setV3Path(winnerVersion === 'v3-multihop' ? v3MultiHopBest!.path : null);
         }
 
         // Price impact vs. the winning path's current spot price — a real
@@ -332,16 +415,77 @@ export function useEvmQuote(
         // direct one. Compute best-effort; never let a failure here block
         // the quote itself.
         //
-        // V2-reserve-shaped only: a V3 pool's concentrated liquidity has
-        // no equivalent "reserveIn/reserveOut" pair to walk this way, so a
-        // V3-sourced quote skips this and reports both as unknown rather
-        // than reusing V2 constant-product math on a shape it doesn't fit
-        // — a real gap (V3 pools can be just as dead as a V2 one), not
-        // yet covered here; flagged as a followup, not silently assumed.
+        // V3 doesn't expose simple reserves the way V2 does (concentrated
+        // liquidity), so this can't reuse the V2 reserve-walk above. Same
+        // idea, different mechanism: quote the SAME winning pool with a
+        // tiny reference amount (near-zero slippage, i.e. close to the
+        // pool's current spot price), scale that rate up to the real
+        // trade size, and compare to what the real trade actually quotes.
+        // A large gap means the trade itself is heavy relative to this
+        // pool specifically — added 2026-09-30 after PENGU, WLFI, and XTZ
+        // (all winning via V3) were found live-quoting at wildly wrong
+        // prices (PENGU ~85x off) with zero warning, because this check
+        // hadn't existed at all for a V3-won quote until now. Validated
+        // against those three plus a known-good V3 token (APE, ~0.3%)
+        // before shipping. Still doesn't catch a pool that's deep enough
+        // to absorb *this* trade cleanly but is itself priced away from
+        // the wider market (see DEXE, config/liquidity.ts) — that needs a
+        // genuine external reference price, a separate, bigger change.
         if (v3Wins) {
-          if (active) {
-            setPriceImpactBps(null);
-            setInsufficientLiquidity(false);
+          try {
+            const tinyAmount = amountInAfterFee / 1000n;
+            if (tinyAmount > 0n) {
+              const tinyOut = winnerVersion === 'v3-multihop'
+                ? ((await withRpcRetry(
+                    () => publicClient.readContract({
+                      address: PANCAKE_V3_QUOTER_BSC_MAINNET,
+                      abi: PancakeV3QuoterABI,
+                      functionName: 'quoteExactInput',
+                      args: [v3MultiHopBest!.path, tinyAmount],
+                    }),
+                    MAX_RETRIES,
+                    BASE_DELAY_MS,
+                  )) as readonly [bigint, readonly bigint[], readonly number[], bigint])[0]
+                : ((await withRpcRetry(
+                    () => publicClient.readContract({
+                      address: PANCAKE_V3_QUOTER_BSC_MAINNET,
+                      abi: PancakeV3QuoterABI,
+                      functionName: 'quoteExactInputSingle',
+                      args: [{
+                        tokenIn: directPath[0],
+                        tokenOut: directPath[1],
+                        amountIn: tinyAmount,
+                        fee: v3Best!.fee,
+                        sqrtPriceLimitX96: 0n,
+                      }],
+                    }),
+                    MAX_RETRIES,
+                    BASE_DELAY_MS,
+                  )) as readonly [bigint, bigint, number, bigint])[0];
+
+              const idealAmount = (tinyOut * amountInAfterFee) / tinyAmount;
+              if (active) {
+                if (idealAmount > 0n) {
+                  const impact = idealAmount > actualOut
+                    ? Number(((idealAmount - actualOut) * 10000n) / idealAmount)
+                    : 0;
+                  setPriceImpactBps(impact);
+                } else {
+                  setPriceImpactBps(null);
+                }
+                setInsufficientLiquidity(false);
+              }
+            } else if (active) {
+              setPriceImpactBps(null);
+              setInsufficientLiquidity(false);
+            }
+          } catch {
+            // Best-effort only — an RPC hiccup here shouldn't hide a
+            // perfectly good quote.
+            if (active) {
+              setPriceImpactBps(null);
+              setInsufficientLiquidity(false);
+            }
           }
         } else {
           try {
@@ -450,6 +594,7 @@ export function useEvmQuote(
           setInsufficientLiquidity(false);
           setQuoteVersion('v2');
           setV3Fee(null);
+          setV3Path(null);
         }
       } finally {
         if (active) {
@@ -466,5 +611,5 @@ export function useEvmQuote(
     };
   }, [chainId, tokenIn, tokenOut, amountIn, intermediateTokensKey, publicClient, tokenInTaxBps, tokenOutTaxBps]);
 
-  return { quote, loading, error, priceImpactBps, insufficientLiquidity, path, quoteVersion, v3Fee };
+  return { quote, loading, error, priceImpactBps, insufficientLiquidity, path, quoteVersion, v3Fee, v3Path };
 }

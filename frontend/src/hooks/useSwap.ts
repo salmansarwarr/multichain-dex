@@ -48,8 +48,9 @@ export function useSwap() {
     // FeeRouter contract actually has them — see useEvmQuote.ts). When
     // 'v3', `v3Fee` (useEvmQuote's `v3Fee`) must be the winning pool's fee
     // tier — required by the V3 functions' `fee` param, meaningless for V2.
-    quoteVersion: 'v2' | 'v3' = 'v2',
-    v3Fee: number | null = null
+    quoteVersion: 'v2' | 'v3' | 'v3-multihop' = 'v2',
+    v3Fee: number | null = null,
+    v3Path: `0x${string}` | null = null
   ) => {
     setState('SWAPPING');
     setError(null);
@@ -72,24 +73,50 @@ export function useSwap() {
 
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20); // 20 mins
 
-      // V3 execution — BSC only (see useEvmQuote.ts; quoteVersion can only
-      // be 'v3' there), direct/single-hop only, matching what's actually
-      // quoted right now. tokenIn/tokenOut come from `path`'s two ends
-      // (already WBNB-substituted for a native endpoint by useEvmQuote),
-      // not the raw `tokenIn` param, since the V3 token->token function
-      // needs a real ERC20 address on both sides.
-      //
-      // NOTE (pre-existing, not introduced here): neither this V3 branch
-      // nor the V2 branch below has a "deliver native BNB out" path —
-      // FeeRouter.sol has no plain swapExactTokensForETHWithFee at all,
-      // only the ETH-in direction. If tokenOut is native BNB, path's last
-      // entry is WBNB, and the *ForTokens* call below delivers wrapped
-      // WBNB to `recipient`, not native BNB — same gap the pre-2026-09-29
-      // V2-only contract already had. FeeRouter.sol's new
-      // swapExactTokensForETHV3WithFee (added alongside V3 support) can
-      // close this once the frontend is intentionally wired for a native
-      // BNB *output*, which is a separate change from this one.
-      if (quoteVersion === 'v3' && v3Fee !== null) {
+      // V3 multi-hop execution — BSC only (see useEvmQuote.ts;
+      // quoteVersion can only be 'v3-multihop' there), a 2-hop route
+      // through a known-liquid intermediate (e.g. PENGU, which has no
+      // meaningful direct WBNB pool on PancakeSwap V3, only a deep one
+      // against USDT). `v3Path` already carries tokenIn/tokenOut implicitly
+      // — the *V3MultiHopWithFee functions decode them from the path
+      // itself on-chain (see FeeRouter.sol) — so only `path[path.length-1]`
+      // is needed here, purely to know whether tokenOut is native BNB (this
+      // app has no BNB-out V3 wiring yet, same gap noted below for
+      // single-hop, so that case falls through to the *ForTokens variant
+      // same as before).
+      if (quoteVersion === 'v3-multihop' && v3Path !== null) {
+        if (isNativeIn) {
+          await writeContractAsync({
+            address: feeRouterAddress,
+            abi,
+            functionName: 'swapExactETHForTokensV3MultiHopWithFee',
+            args: [amountOutMin, v3Path, recipient, deadline],
+            value: amountIn,
+          });
+        } else {
+          await writeContractAsync({
+            address: feeRouterAddress,
+            abi,
+            functionName: 'swapExactTokensForTokensV3MultiHopWithFee',
+            args: [amountIn, amountOutMin, v3Path, recipient, deadline],
+          });
+        }
+      } else if (quoteVersion === 'v3' && v3Fee !== null) {
+        // Direct/single-hop only, matching what's actually quoted. tokenIn/
+        // tokenOut come from `path`'s two ends (already WBNB-substituted
+        // for a native endpoint by useEvmQuote).
+        //
+        // NOTE (pre-existing, not introduced here): neither this branch nor
+        // the multi-hop one above, nor the V2 branch below, has a "deliver
+        // native BNB out" path — FeeRouter.sol has no plain
+        // swapExactTokensForETHWithFee at all, only the ETH-in direction.
+        // If tokenOut is native BNB, path's last entry is WBNB, and the
+        // *ForTokens call below delivers wrapped WBNB to `recipient`, not
+        // native BNB — same gap the pre-2026-09-29 V2-only contract already
+        // had. FeeRouter.sol's swapExactTokensForETHV3WithFee /
+        // swapExactTokensForETHV3MultiHopWithFee (added alongside V3
+        // support) can close this once the frontend is intentionally wired
+        // for a native BNB *output*, a separate change from this one.
         if (isNativeIn) {
           await writeContractAsync({
             address: feeRouterAddress,
