@@ -37,6 +37,18 @@ const FORK_BLOCK_NUMBER = process.env.FORK_BLOCK_NUMBER
 const UNISWAP_V2_ROUTER02 = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
 const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+// Uniswap V3's original SwapRouter (struct params include `deadline`, the
+// shape EthFeeRouter's IPancakeV3SwapRouter interface expects) and
+// QuoterV2. Both ABIs verified against Sourcify's chain-1 records.
+const UNISWAP_V3_SWAP_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
+const UNISWAP_V3_QUOTER_V2 = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e";
+const MORPHO = "0x58D97B57BB95320F9a05dC918Aef65434969c2B2";
+const USDE = "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3";
+
+const QUOTER_ABI = [
+  "function quoteExactInputSingle((address tokenIn,address tokenOut,uint256 amountIn,uint24 fee,uint160 sqrtPriceLimitX96)) returns (uint256,uint160,uint32,uint256)",
+  "function quoteExactInput(bytes path,uint256 amountIn) returns (uint256,uint160[],uint32[],uint256)",
+];
 
 // Minimal WETH ABI — wrap native ETH ourselves rather than depending on a
 // whale address (whale balances drift; wrapping our own ETH doesn't).
@@ -98,6 +110,8 @@ describeOrSkip("EthFeeRouter — Ethereum mainnet fork (Phase 2 manual gate)", f
     const EthFeeRouter = await ethers.getContractFactory("EthFeeRouter");
     const ethFeeRouter = await EthFeeRouter.deploy(
       UNISWAP_V2_ROUTER02,
+      UNISWAP_V3_SWAP_ROUTER,
+      WETH,
       feeWallet.address,
       15, // 0.15%
       deployer.address
@@ -127,5 +141,72 @@ describeOrSkip("EthFeeRouter — Ethereum mainnet fork (Phase 2 manual gate)", f
 
     expect(feeWalletWethAfter - feeWalletWethBefore).to.equal(expectedFee);
     expect(userUsdcAfter).to.be.gt(userUsdcBefore); // real swap actually executed against live liquidity
+  });
+
+  async function deployV3Router() {
+    const [deployer, feeWallet, user] = await ethers.getSigners();
+    await network.provider.request({
+      method: "hardhat_setBalance",
+      params: [user.address, ethers.toQuantity(ethers.parseEther("10"))],
+    });
+    const EthFeeRouter = await ethers.getContractFactory("EthFeeRouter");
+    const ethFeeRouter = await EthFeeRouter.deploy(
+      UNISWAP_V2_ROUTER02,
+      UNISWAP_V3_SWAP_ROUTER,
+      WETH,
+      feeWallet.address,
+      15,
+      deployer.address
+    );
+    const quoter = new ethers.Contract(UNISWAP_V3_QUOTER_V2, QUOTER_ABI, user);
+    return { ethFeeRouter, feeWallet, user, quoter };
+  }
+
+  it("ETH -> MORPHO through a single Uniswap V3 pool: exact 0.15% fee, output matches the quoter", async function () {
+    const { ethFeeRouter, feeWallet, user, quoter } = await deployV3Router();
+    const amountIn = ethers.parseEther("1");
+    const afterFee = amountIn - (amountIn * 15n) / 10_000n;
+    const [quoted] = await quoter.quoteExactInputSingle.staticCall({
+      tokenIn: WETH, tokenOut: MORPHO, amountIn: afterFee, fee: 3000, sqrtPriceLimitX96: 0,
+    });
+    const morpho = await ethers.getContractAt("IERC20", MORPHO);
+    const feeWalletEthBefore = await ethers.provider.getBalance(feeWallet.address);
+
+    const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+    await ethFeeRouter.connect(user).swapExactETHForTokensV3WithFee(quoted, MORPHO, 3000, user.address, deadline, { value: amountIn });
+
+    expect((await ethers.provider.getBalance(feeWallet.address)) - feeWalletEthBefore).to.equal((amountIn * 15n) / 10_000n);
+    expect(await morpho.balanceOf(user.address)).to.equal(quoted);
+  });
+
+  it("ETH -> USDC -> USDe through two chained Uniswap V3 pools: output matches the quoter", async function () {
+    const { ethFeeRouter, user, quoter } = await deployV3Router();
+    const amountIn = ethers.parseEther("1");
+    const afterFee = amountIn - (amountIn * 15n) / 10_000n;
+    const path = ethers.solidityPacked(["address", "uint24", "address", "uint24", "address"], [WETH, 500, USDC, 100, USDE]);
+    const [quoted] = await quoter.quoteExactInput.staticCall(path, afterFee);
+    const usde = await ethers.getContractAt("IERC20", USDE);
+
+    const deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+    await ethFeeRouter.connect(user).swapExactETHForTokensV3MultiHopWithFee(quoted, path, user.address, deadline, { value: amountIn });
+
+    expect(await usde.balanceOf(user.address)).to.equal(quoted);
+  });
+
+  it("MORPHO -> native ETH through Uniswap V3 (swap then unwrap WETH): user receives native ETH", async function () {
+    const { ethFeeRouter, user } = await deployV3Router();
+    let deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+    await ethFeeRouter.connect(user).swapExactETHForTokensV3WithFee(0, MORPHO, 3000, user.address, deadline, { value: ethers.parseEther("1") });
+    const morpho = await ethers.getContractAt("IERC20", MORPHO);
+    const bal = await morpho.balanceOf(user.address);
+    await morpho.connect(user).approve(await ethFeeRouter.getAddress(), bal);
+
+    const ethBefore = await ethers.provider.getBalance(user.address);
+    deadline = (await ethers.provider.getBlock("latest"))!.timestamp + 300;
+    const tx = await ethFeeRouter.connect(user).swapExactTokensForETHV3WithFee(bal, 0, MORPHO, 3000, user.address, deadline);
+    const r = await tx.wait();
+    const received = (await ethers.provider.getBalance(user.address)) - ethBefore + r!.gasUsed * r!.gasPrice;
+    // Round trip through a 0.3% pool twice plus our fee twice: well over 0.95 ETH back.
+    expect(received).to.be.gt(ethers.parseEther("0.95"));
   });
 });

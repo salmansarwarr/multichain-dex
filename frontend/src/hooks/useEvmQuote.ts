@@ -9,7 +9,7 @@ import { PancakeV3QuoterABI } from '../abis/PancakeV3Quoter';
 import { NATIVE_TOKEN_ADDRESS } from '../data/tokens';
 import { getFeeRouterAddress, contracts } from '../config/contracts';
 import { getMinNativeReserveWei } from '../config/liquidity';
-import { PANCAKE_V3_QUOTER_BSC_MAINNET, PANCAKE_V3_FEE_TIERS } from '../config/pancakeV3';
+import { getV3Config } from '../config/v3';
 import { withRpcRetry } from './rpcRetry';
 
 // Quote reads are single quick calls, not a chunked scan, so a couple of
@@ -203,9 +203,15 @@ export function useEvmQuote(
         // can quote a far better rate than the direct one. Each candidate
         // is allowed to revert (e.g. INSUFFICIENT_LIQUIDITY) independently;
         // whichever succeeding candidate yields the higher final output wins.
+        // The native-currency placeholder (e.g. Ethereum's 'ETH' entry) can't
+        // be routed through; its wrapped token is the real intermediate.
+        const routableIntermediates = (intermediateTokens ?? []).map((t) =>
+          t.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase() ? wethAddress : t
+        );
+
         const candidatePaths: Address[][] = [directPath];
         const seenIntermediates = new Set<string>();
-        for (const intermediateToken of intermediateTokens ?? []) {
+        for (const intermediateToken of routableIntermediates) {
           const key = intermediateToken.toLowerCase();
           if (
             key === directPath[0].toLowerCase() ||
@@ -242,7 +248,9 @@ export function useEvmQuote(
           (a): a is { path: Address[]; out: bigint; err: null } => a.out !== null
         );
 
-        // --- PancakeSwap V3 candidates (BSC mainnet only). Gated on the
+        // --- V3 candidates: PancakeSwap V3 on BSC mainnet, Uniswap V3 on
+        // Ethereum mainnet (since 2026-10-04 — most Ethereum tokens' real
+        // liquidity is on V3, the same gap BSC had). Gated on the
         // *configured* FeeRouter contract's own v3Router() actually reading
         // non-zero, so this stays fully inert against the pre-2026-09-29
         // mainnet contract (no such function at all — the read below just
@@ -250,12 +258,13 @@ export function useEvmQuote(
         // contract is redeployed with V3 support — see FeeRouter.sol.
         let v3Best: { out: bigint; fee: number } | null = null;
         let v3MultiHopBest: { out: bigint; mid: Address; path: `0x${string}` } | null = null;
-        if (isBscFamily && chainId === contracts.bscMainnet.chainId) {
+        const v3Config = getV3Config(chainId);
+        if (v3Config) {
           try {
             const onChainV3Router = await withRpcRetry(
               () => publicClient.readContract({
                 address: feeRouterAddress,
-                abi: FeeRouterABI,
+                abi: isBscFamily ? FeeRouterABI : EthFeeRouterABI,
                 functionName: 'v3Router',
               }),
               MAX_RETRIES,
@@ -264,11 +273,11 @@ export function useEvmQuote(
 
             if (onChainV3Router !== '0x0000000000000000000000000000000000000000') {
               const v3Attempts = await Promise.all(
-                PANCAKE_V3_FEE_TIERS.map(async (feeTier) => {
+                v3Config.feeTiers.map(async (feeTier) => {
                   try {
                     const result = await withRpcRetry(
                       () => publicClient.readContract({
-                        address: PANCAKE_V3_QUOTER_BSC_MAINNET,
+                        address: v3Config!.quoter,
                         abi: PancakeV3QuoterABI,
                         functionName: 'quoteExactInputSingle',
                         args: [{
@@ -312,7 +321,7 @@ export function useEvmQuote(
               // file, just extended to 2-hop V3 paths too.
               const multiHopCandidates: { mid: Address; fee1: number; fee2: number }[] = [];
               const seenMultiHopMid = new Set<string>();
-              for (const intermediateToken of intermediateTokens ?? []) {
+              for (const intermediateToken of routableIntermediates) {
                 const key = intermediateToken.toLowerCase();
                 if (
                   key === directPath[0].toLowerCase() ||
@@ -322,8 +331,8 @@ export function useEvmQuote(
                   continue;
                 }
                 seenMultiHopMid.add(key);
-                for (const fee1 of PANCAKE_V3_FEE_TIERS) {
-                  for (const fee2 of PANCAKE_V3_FEE_TIERS) {
+                for (const fee1 of v3Config.feeTiers) {
+                  for (const fee2 of v3Config.feeTiers) {
                     multiHopCandidates.push({ mid: intermediateToken as Address, fee1, fee2 });
                   }
                 }
@@ -338,7 +347,7 @@ export function useEvmQuote(
                     );
                     const result = await withRpcRetry(
                       () => publicClient.readContract({
-                        address: PANCAKE_V3_QUOTER_BSC_MAINNET,
+                        address: v3Config!.quoter,
                         abi: PancakeV3QuoterABI,
                         functionName: 'quoteExactInput',
                         args: [candidatePath, amountInAfterFee],
@@ -438,7 +447,7 @@ export function useEvmQuote(
               const tinyOut = winnerVersion === 'v3-multihop'
                 ? ((await withRpcRetry(
                     () => publicClient.readContract({
-                      address: PANCAKE_V3_QUOTER_BSC_MAINNET,
+                      address: v3Config!.quoter,
                       abi: PancakeV3QuoterABI,
                       functionName: 'quoteExactInput',
                       args: [v3MultiHopBest!.path, tinyAmount],
@@ -448,7 +457,7 @@ export function useEvmQuote(
                   )) as readonly [bigint, readonly bigint[], readonly number[], bigint])[0]
                 : ((await withRpcRetry(
                     () => publicClient.readContract({
-                      address: PANCAKE_V3_QUOTER_BSC_MAINNET,
+                      address: v3Config!.quoter,
                       abi: PancakeV3QuoterABI,
                       functionName: 'quoteExactInputSingle',
                       args: [{

@@ -34,6 +34,8 @@ async function main() {
   const EthFeeRouterFactory = await ethers.getContractFactory("EthFeeRouter");
   const ethFeeRouter = await EthFeeRouterFactory.deploy(
     UNISWAP_ROUTER_SEPOLIA,
+    ethers.ZeroAddress, // v3Router: V3 not wired on this chain yet
+    ethers.ZeroAddress, // wrappedNative
     feeWallet,
     FEE_BPS,
     deployer.address

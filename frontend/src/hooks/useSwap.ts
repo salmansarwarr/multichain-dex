@@ -42,10 +42,9 @@ export function useSwap() {
     path: Address[],
     feeOnTransfer: boolean = false,
     // Which router version produced this quote (useEvmQuote's
-    // `quoteVersion`) — 'v2' by default for every caller that predates
-    // this param (Ethereum/Arbitrum's EthFeeRouter has no V3 functions at
-    // all yet, and BSC only ever returns 'v3' once the configured
-    // FeeRouter contract actually has them — see useEvmQuote.ts). When
+    // `quoteVersion`) — 'v2' by default. useEvmQuote only returns a V3
+    // version on BSC mainnet and Ethereum mainnet, and only once the
+    // configured fee-router contract reports a non-zero v3Router(). When
     // 'v3', `v3Fee` (useEvmQuote's `v3Fee`) must be the winning pool's fee
     // tier — required by the V3 functions' `fee` param, meaningless for V2.
     quoteVersion: 'v2' | 'v3' | 'v3-multihop' = 'v2',
@@ -73,8 +72,8 @@ export function useSwap() {
 
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20); // 20 mins
 
-      // V3 multi-hop execution — BSC only (see useEvmQuote.ts;
-      // quoteVersion can only be 'v3-multihop' there), a 2-hop route
+      // V3 multi-hop execution (BSC and Ethereum mainnet — see
+      // useEvmQuote.ts), a 2-hop route
       // through a known-liquid intermediate (e.g. PENGU, which has no
       // meaningful direct WBNB pool on PancakeSwap V3, only a deep one
       // against USDT). `v3Path` already carries tokenIn/tokenOut implicitly

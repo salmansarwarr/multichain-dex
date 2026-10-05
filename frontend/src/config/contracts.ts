@@ -24,7 +24,7 @@ export const contracts = {
   // on Etherscan. Owner/fee-wallet/router confirmed live via on-chain reads
   // 2026-08-23 — see docs/deployments.md.
   mainnet: {
-    feeRouter: (process.env.NEXT_PUBLIC_ETH_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x542e6c05156d8946730029589e5b785cb40cf1ba',
+    feeRouter: (process.env.NEXT_PUBLIC_ETH_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x0766dEf109f1a78B2a13b0Bbc8f3E4c9E477fF09',
     chainId: customMainnet.id,
   },
   arbitrumSepolia: {

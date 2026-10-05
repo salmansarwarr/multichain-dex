@@ -20,6 +20,13 @@
  * Usage:
  *   npx hardhat run scripts/deploy-eth-mainnet.ts --network ethMainnet
  *
+ * 2026-10-04: now also wires Uniswap V3 (SwapRouter + WETH) — most Ethereum
+ * tokens' real liquidity is on V3, not V2. Addresses below were checked
+ * against Sourcify's verified chain-1 records, and the V3 path was
+ * exercised against live mainnet state in test/fork/EthFeeRouter.fork.test.ts.
+ * The previous (V2-only, Remix-deployed) contract's record is preserved in
+ * eth-mainnet.json's `previousDeployments`.
+ *
  * Uniswap V2 Router02 on Ethereum Mainnet:
  *   0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
  *   (canonical address per Uniswap's own deployments documentation:
@@ -32,6 +39,10 @@ import * as path from "path";
 
 // Uniswap V2 Router02 on Ethereum Mainnet.
 const UNISWAP_ROUTER_ETH_MAINNET = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
+
+// Uniswap V3's original SwapRouter (params struct includes `deadline`) and WETH9.
+const UNISWAP_V3_SWAP_ROUTER_ETH_MAINNET = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
+const WETH_ETH_MAINNET = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 
 // Fee in basis points: 15 = 0.15%
 const FEE_BPS = 15;
@@ -75,6 +86,8 @@ async function main() {
   console.log(`Balance   : ${ethers.formatEther(await ethers.provider.getBalance(deployer.address))} ETH`);
   console.log(`Network   : ${networkName} (chain ${(await ethers.provider.getNetwork()).chainId})`);
   console.log(`Router    : ${UNISWAP_ROUTER_ETH_MAINNET}`);
+  console.log(`V3 router : ${UNISWAP_V3_SWAP_ROUTER_ETH_MAINNET}`);
+  console.log(`WETH      : ${WETH_ETH_MAINNET}`);
   console.log(`Fee wallet: ${feeWallet}`);
   console.log(`Owner     : ${owner}`);
   console.log(`Fee bps   : ${FEE_BPS} (${FEE_BPS / 100}%)`);
@@ -85,6 +98,8 @@ async function main() {
   console.log("Deploying EthFeeRouter...");
   const ethFeeRouter = await EthFeeRouterFactory.deploy(
     UNISWAP_ROUTER_ETH_MAINNET,
+    UNISWAP_V3_SWAP_ROUTER_ETH_MAINNET,
+    WETH_ETH_MAINNET,
     feeWallet,
     FEE_BPS,
     owner
@@ -123,6 +138,12 @@ async function main() {
     fs.mkdirSync(deploymentsDir, { recursive: true });
   }
 
+  const outputPath = path.join(deploymentsDir, "eth-mainnet.json");
+  const previous = fs.existsSync(outputPath) ? JSON.parse(fs.readFileSync(outputPath, "utf8")) : null;
+  const previousDeployments = previous
+    ? [...(previous.previousDeployments ?? []), { ...previous, previousDeployments: undefined }]
+    : [];
+
   const record = {
     network: "ethMainnet",
     chainId: 1,
@@ -132,13 +153,15 @@ async function main() {
     deployedAt: new Date().toISOString(),
     constructorArgs: {
       uniswapRouter: UNISWAP_ROUTER_ETH_MAINNET,
+      v3Router: UNISWAP_V3_SWAP_ROUTER_ETH_MAINNET,
+      wrappedNative: WETH_ETH_MAINNET,
       feeWallet,
       feeBps: FEE_BPS,
       initialOwner: owner,
     },
+    previousDeployments,
   };
 
-  const outputPath = path.join(deploymentsDir, "eth-mainnet.json");
   fs.writeFileSync(outputPath, JSON.stringify(record, null, 2));
   console.log(`\nDeployment record saved to: ${outputPath}`);
 

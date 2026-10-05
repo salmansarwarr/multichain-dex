@@ -88,6 +88,8 @@ async function main() {
   console.log("Deploying EthFeeRouter...");
   const ethFeeRouter = await EthFeeRouterFactory.deploy(
     UNISWAP_ROUTER_ARBITRUM_ONE,
+    ethers.ZeroAddress, // v3Router: V3 not wired on this chain yet
+    ethers.ZeroAddress, // wrappedNative
     feeWallet,
     FEE_BPS,
     owner

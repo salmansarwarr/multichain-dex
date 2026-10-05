@@ -2,18 +2,36 @@
   "network": "ethMainnet",
   "chainId": 1,
   "contract": "EthFeeRouter",
-  "address": "0x542e6c05156d8946730029589e5b785cb40cf1ba",
-  "deployTxHash": null,
-  "deployedVia": "Remix (manual deployment, not deploy-eth-mainnet.ts)",
-  "deployedAt": null,
-  "verifiedOnChain": {
-    "note": "Values below read directly from the deployed contract's own view functions on 2026-08-23, not from a deploy script record.",
-    "checkedAt": "2026-08-23T00:00:00.000Z"
-  },
+  "address": "0x0766dEf109f1a78B2a13b0Bbc8f3E4c9E477fF09",
+  "deployTxHash": "0xf1382ff4959656c9e0cfaee6a41231d2daea2dd60c5292737d4ce9bfff535e4c",
+  "deployedAt": "2026-10-04T12:36:02.777Z",
   "constructorArgs": {
     "uniswapRouter": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+    "v3Router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+    "wrappedNative": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
     "feeBps": 15,
     "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
-  }
+  },
+  "previousDeployments": [
+    {
+      "network": "ethMainnet",
+      "chainId": 1,
+      "contract": "EthFeeRouter",
+      "address": "0x542e6c05156d8946730029589e5b785cb40cf1ba",
+      "deployTxHash": null,
+      "deployedVia": "Remix (manual deployment, not deploy-eth-mainnet.ts)",
+      "deployedAt": null,
+      "verifiedOnChain": {
+        "note": "Values below read directly from the deployed contract's own view functions on 2026-08-23, not from a deploy script record.",
+        "checkedAt": "2026-08-23T00:00:00.000Z"
+      },
+      "constructorArgs": {
+        "uniswapRouter": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+        "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+        "feeBps": 15,
+        "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+      }
+    }
+  ]
 }

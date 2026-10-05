@@ -7,9 +7,14 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IUniswapV2Router02} from "./interfaces/IUniswapV2Router02.sol";
+// Uniswap V3's original SwapRouter has the exact ABI shape of this
+// interface (PancakeSwap's V3 periphery is a direct fork of it).
+import {IPancakeV3SwapRouter} from "./interfaces/IPancakeV3SwapRouter.sol";
+import {IWETH} from "./interfaces/IWETH.sol";
 
 /// @title EthFeeRouter
-/// @notice Thin wrapper around Uniswap's Router02. Same fee-skim pattern as
+/// @notice Thin wrapper around Uniswap's Router02 and (since 2026-10-04)
+/// Uniswap V3's SwapRouter. Same fee-skim pattern as
 /// BSC's FeeRouter, adapted for two Ethereum-specific realities:
 ///
 /// 1. Gas cost: rather than reimplementing routing logic, this stays a
@@ -50,6 +55,17 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     uint256 private constant FEE_WALLET_CALL_GAS_LIMIT = 30_000;
 
     IUniswapV2Router02 public immutable uniswapRouter;
+
+    /// @notice Uniswap V3 SwapRouter for the *V3* functions below, or the
+    /// zero address on a chain deployed without V3 (those functions then
+    /// revert with `V3RouterNotSet`). Most Ethereum tokens' real liquidity
+    /// is on V3, not V2 — see FeeRouter.sol for the same change on BSC.
+    IPancakeV3SwapRouter public immutable v3Router;
+
+    /// @notice Canonical WETH, used by the V3 native-ETH functions to wrap/
+    /// unwrap around a V3 pool. May be the zero address (those functions
+    /// then revert with `WrappedNativeNotSet`).
+    IWETH public immutable wrappedNative;
 
     address public feeWallet;
     uint256 public feeBps;
@@ -92,9 +108,15 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     error EthTransferFailed();
     error NothingToWithdraw();
     error InsufficientRescueBalance();
+    error V3RouterNotSet();
+    error WrappedNativeNotSet();
+    error InvalidV3Path();
+    error ZeroFeeTier();
 
     constructor(
         address _uniswapRouter,
+        address _v3Router,
+        address _wrappedNative,
         address _feeWallet,
         uint256 _feeBps,
         address initialOwner
@@ -105,6 +127,8 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
         if (_feeBps > MAX_FEE_BPS) revert FeeExceedsCap(_feeBps, MAX_FEE_BPS);
 
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
+        v3Router = IPancakeV3SwapRouter(_v3Router);
+        wrappedNative = IWETH(_wrappedNative);
         feeWallet = _feeWallet;
         feeBps = _feeBps;
     }
@@ -376,6 +400,270 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------
+    // Swaps — Uniswap V3
+    // ---------------------------------------------------------------------
+    //
+    // No SupportingFeeOnTransferTokens variants here, unlike the V2
+    // functions above: exactInputSingle/exactInput already settle on
+    // whatever the pool actually receives/pays out (bounded by
+    // `amountOutMinimum`), so a taxed tokenIn or tokenOut doesn't need a
+    // separate code path the way V2's fixed-amount accounting did.
+
+    /// @notice Swap an exact amount of `tokenIn` for `tokenOut` through a
+    /// single Uniswap V3 pool, taking a fee off `amountIn` first.
+    /// @param fee The pool's fee tier (e.g. 500 = 0.05%, 3000 = 0.3%,
+    /// 10000 = 1%) — whichever tier the frontend's quote found liquidity
+    /// in. Caller-supplied, like V2's `path`; protected by `amountOutMin`,
+    /// not validated against a fee-tier whitelist here.
+    function swapExactTokensForTokensV3WithFee(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address tokenIn,
+        address tokenOut,
+        uint24 fee,
+        address to,
+        uint256 deadline
+    ) external nonReentrant whenNotPaused returns (uint256 amountOut) {
+        if (address(v3Router) == address(0)) revert V3RouterNotSet();
+        if (to == address(0) || tokenOut == address(0)) revert ZeroAddress();
+        if (fee == 0) revert ZeroFeeTier();
+
+        (uint256 received, uint256 feeAmount, uint256 amountAfterFee) =
+            _pullAndSkimFeeToken(amountIn, tokenIn, deadline);
+
+        IERC20(tokenIn).forceApprove(address(v3Router), amountAfterFee);
+
+        amountOut = v3Router.exactInputSingle(
+            IPancakeV3SwapRouter.ExactInputSingleParams({
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                fee: fee,
+                recipient: to,
+                deadline: deadline,
+                amountIn: amountAfterFee,
+                amountOutMinimum: amountOutMin,
+                sqrtPriceLimitX96: 0
+            })
+        );
+
+        IERC20(tokenIn).forceApprove(address(v3Router), 0);
+
+        emit SwapExecuted(msg.sender, tokenIn, tokenOut, received, feeAmount);
+    }
+
+    /// @notice Same as above, routed through 2+ chained V3 pools via a
+    /// pre-encoded path (see `IPancakeV3SwapRouter.ExactInputParams`).
+    /// `tokenIn`/`tokenOut` are decoded from `v3Path` itself (its first and
+    /// last 20 bytes) rather than taken as separate params, so they can
+    /// never disagree with what the path actually swaps.
+    function swapExactTokensForTokensV3MultiHopWithFee(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        bytes calldata v3Path,
+        address to,
+        uint256 deadline
+    ) external nonReentrant whenNotPaused returns (uint256 amountOut) {
+        if (address(v3Router) == address(0)) revert V3RouterNotSet();
+        if (to == address(0)) revert ZeroAddress();
+        _validateV3MultiHopPath(v3Path);
+
+        address tokenIn = _decodeFirstToken(v3Path);
+        address tokenOut = _decodeLastToken(v3Path);
+
+        (uint256 received, uint256 feeAmount, uint256 amountAfterFee) =
+            _pullAndSkimFeeToken(amountIn, tokenIn, deadline);
+
+        IERC20(tokenIn).forceApprove(address(v3Router), amountAfterFee);
+
+        amountOut = v3Router.exactInput(
+            IPancakeV3SwapRouter.ExactInputParams({
+                path: v3Path,
+                recipient: to,
+                deadline: deadline,
+                amountIn: amountAfterFee,
+                amountOutMinimum: amountOutMin
+            })
+        );
+
+        IERC20(tokenIn).forceApprove(address(v3Router), 0);
+
+        emit SwapExecuted(msg.sender, tokenIn, tokenOut, received, feeAmount);
+    }
+
+    /// @notice Swap exact native ETH (msg.value) for `tokenOut` through a
+    /// single V3 pool, taking a fee off msg.value first. Wraps the
+    /// post-fee ETH to `wrappedNative` itself rather than relying on the
+    /// V3 router's own native-token handling.
+    function swapExactETHForTokensV3WithFee(
+        uint256 amountOutMin,
+        address tokenOut,
+        uint24 fee,
+        address to,
+        uint256 deadline
+    ) external payable nonReentrant whenNotPaused returns (uint256 amountOut) {
+        if (address(v3Router) == address(0)) revert V3RouterNotSet();
+        if (address(wrappedNative) == address(0)) revert WrappedNativeNotSet();
+        if (to == address(0) || tokenOut == address(0)) revert ZeroAddress();
+        if (fee == 0) revert ZeroFeeTier();
+        if (msg.value == 0) revert ZeroAmount();
+        if (block.timestamp > deadline) revert DeadlineExpired();
+
+        (uint256 feeAmount, uint256 amountAfterFee) = _sendEthFeeOrQueue(msg.value);
+
+        wrappedNative.deposit{value: amountAfterFee}();
+        IERC20(address(wrappedNative)).forceApprove(address(v3Router), amountAfterFee);
+
+        amountOut = v3Router.exactInputSingle(
+            IPancakeV3SwapRouter.ExactInputSingleParams({
+                tokenIn: address(wrappedNative),
+                tokenOut: tokenOut,
+                fee: fee,
+                recipient: to,
+                deadline: deadline,
+                amountIn: amountAfterFee,
+                amountOutMinimum: amountOutMin,
+                sqrtPriceLimitX96: 0
+            })
+        );
+
+        IERC20(address(wrappedNative)).forceApprove(address(v3Router), 0);
+
+        emit SwapExecuted(msg.sender, address(0), tokenOut, msg.value, feeAmount);
+    }
+
+    /// @notice Same as above, routed through 2+ chained V3 pools. `v3Path`
+    /// must start with `wrappedNative` — checked, since that's what this
+    /// function actually swaps in.
+    function swapExactETHForTokensV3MultiHopWithFee(
+        uint256 amountOutMin,
+        bytes calldata v3Path,
+        address to,
+        uint256 deadline
+    ) external payable nonReentrant whenNotPaused returns (uint256 amountOut) {
+        if (address(v3Router) == address(0)) revert V3RouterNotSet();
+        if (address(wrappedNative) == address(0)) revert WrappedNativeNotSet();
+        if (to == address(0)) revert ZeroAddress();
+        if (msg.value == 0) revert ZeroAmount();
+        if (block.timestamp > deadline) revert DeadlineExpired();
+        _validateV3MultiHopPath(v3Path);
+        if (_decodeFirstToken(v3Path) != address(wrappedNative)) revert InvalidV3Path();
+
+        address tokenOut = _decodeLastToken(v3Path);
+
+        (uint256 feeAmount, uint256 amountAfterFee) = _sendEthFeeOrQueue(msg.value);
+
+        wrappedNative.deposit{value: amountAfterFee}();
+        IERC20(address(wrappedNative)).forceApprove(address(v3Router), amountAfterFee);
+
+        amountOut = v3Router.exactInput(
+            IPancakeV3SwapRouter.ExactInputParams({
+                path: v3Path,
+                recipient: to,
+                deadline: deadline,
+                amountIn: amountAfterFee,
+                amountOutMinimum: amountOutMin
+            })
+        );
+
+        IERC20(address(wrappedNative)).forceApprove(address(v3Router), 0);
+
+        emit SwapExecuted(msg.sender, address(0), tokenOut, msg.value, feeAmount);
+    }
+
+    /// @notice Swap exact `tokenIn` for native ETH through a single V3
+    /// pool, taking a fee off `amountIn` first. The V3 router pays the
+    /// swap's output to this contract (as WETH, an ERC20 — it has no
+    /// concept of "send this recipient native currency", same reason
+    /// Uniswap V3's own periphery needs a separate unwrap step for
+    /// ETH-out swaps), which then unwraps and forwards it to `to`.
+    function swapExactTokensForETHV3WithFee(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address tokenIn,
+        uint24 fee,
+        address to,
+        uint256 deadline
+    ) external nonReentrant whenNotPaused returns (uint256 amountOut) {
+        if (address(v3Router) == address(0)) revert V3RouterNotSet();
+        if (address(wrappedNative) == address(0)) revert WrappedNativeNotSet();
+        if (to == address(0)) revert ZeroAddress();
+        if (fee == 0) revert ZeroFeeTier();
+
+        (uint256 received, uint256 feeAmount, uint256 amountAfterFee) =
+            _pullAndSkimFeeToken(amountIn, tokenIn, deadline);
+
+        IERC20(tokenIn).forceApprove(address(v3Router), amountAfterFee);
+
+        amountOut = v3Router.exactInputSingle(
+            IPancakeV3SwapRouter.ExactInputSingleParams({
+                tokenIn: tokenIn,
+                tokenOut: address(wrappedNative),
+                fee: fee,
+                recipient: address(this),
+                deadline: deadline,
+                amountIn: amountAfterFee,
+                amountOutMinimum: amountOutMin,
+                sqrtPriceLimitX96: 0
+            })
+        );
+
+        IERC20(tokenIn).forceApprove(address(v3Router), 0);
+
+        wrappedNative.withdraw(amountOut);
+        // recipient (`to`) is the swap's own caller-chosen destination, same
+        // trust level as V2's `to` param — not attacker-supplied in any way
+        // that affects other users' funds.
+        // slither-disable-next-line arbitrary-send-eth
+        (bool sent, ) = to.call{value: amountOut}("");
+        if (!sent) revert EthTransferFailed();
+
+        emit SwapExecuted(msg.sender, tokenIn, address(0), received, feeAmount);
+    }
+
+    /// @notice Same as above, routed through 2+ chained V3 pools. `v3Path`
+    /// must end with `wrappedNative` — checked, since that's what this
+    /// function actually unwraps and pays out.
+    function swapExactTokensForETHV3MultiHopWithFee(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        bytes calldata v3Path,
+        address to,
+        uint256 deadline
+    ) external nonReentrant whenNotPaused returns (uint256 amountOut) {
+        if (address(v3Router) == address(0)) revert V3RouterNotSet();
+        if (address(wrappedNative) == address(0)) revert WrappedNativeNotSet();
+        if (to == address(0)) revert ZeroAddress();
+        _validateV3MultiHopPath(v3Path);
+        if (_decodeLastToken(v3Path) != address(wrappedNative)) revert InvalidV3Path();
+
+        address tokenIn = _decodeFirstToken(v3Path);
+
+        (uint256 received, uint256 feeAmount, uint256 amountAfterFee) =
+            _pullAndSkimFeeToken(amountIn, tokenIn, deadline);
+
+        IERC20(tokenIn).forceApprove(address(v3Router), amountAfterFee);
+
+        amountOut = v3Router.exactInput(
+            IPancakeV3SwapRouter.ExactInputParams({
+                path: v3Path,
+                recipient: address(this),
+                deadline: deadline,
+                amountIn: amountAfterFee,
+                amountOutMinimum: amountOutMin
+            })
+        );
+
+        IERC20(tokenIn).forceApprove(address(v3Router), 0);
+
+        wrappedNative.withdraw(amountOut);
+        // slither-disable-next-line arbitrary-send-eth
+        (bool sent, ) = to.call{value: amountOut}("");
+        if (!sent) revert EthTransferFailed();
+
+        emit SwapExecuted(msg.sender, tokenIn, address(0), received, feeAmount);
+    }
+
+    // ---------------------------------------------------------------------
     // Internal
     // ---------------------------------------------------------------------
 
@@ -460,6 +748,75 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
         amountAfterFee = amountIn - feeAmount;
     }
 
+    /// @dev V3 equivalent of `_pullAndSkimFee`, for the V3 functions above —
+    /// they take a single `tokenIn` rather than a `path`, since a V3 path
+    /// (when used at all) is a packed-bytes encoding decoded separately by
+    /// `_decodeFirstToken`/`_decodeLastToken`. Same pull-then-skim
+    /// mechanics and same tax-tolerant balance-delta measurement as
+    /// `_pullAndSkimFee` — kept as a separate function rather than a shared
+    /// one so neither the proven V2 path nor this one risks a regression
+    /// from being refactored to fit the other's shape.
+    function _pullAndSkimFeeToken(
+        uint256 amountIn,
+        address tokenIn,
+        uint256 deadline
+    ) internal returns (uint256 received, uint256 feeAmount, uint256 amountAfterFee) {
+        if (amountIn == 0) revert ZeroAmount();
+        if (tokenIn == address(0)) revert ZeroAddress();
+        if (block.timestamp > deadline) revert DeadlineExpired();
+
+        uint256 balanceBefore = IERC20(tokenIn).balanceOf(address(this));
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        received = IERC20(tokenIn).balanceOf(address(this)) - balanceBefore;
+
+        // slither-disable-next-line incorrect-equality
+        if (received == 0) revert ZeroAmount();
+
+        (feeAmount, amountAfterFee) = _computeFee(received);
+
+        if (feeAmount > 0) {
+            if (!IERC20(tokenIn).trySafeTransfer(feeWallet, feeAmount)) {
+                pendingTokenFeesByWallet[feeWallet][tokenIn] += feeAmount;
+                totalPendingTokenFees[tokenIn] += feeAmount;
+                emit FeeWalletTransferFailed(feeWallet, feeAmount);
+            }
+        }
+    }
+
+    /// @dev Shared native-ETH fee push for the two V3 *ETH* functions —
+    /// same gas-capped push / pending-ledger-fallback pattern as the V2 ETH
+    /// functions above, factored out here since both V3 ETH functions need
+    /// it identically (the V2 ones are left as-is, each already correct and
+    /// independently tested; no benefit to retrofitting them onto this).
+    function _sendEthFeeOrQueue(uint256 amountIn) internal returns (uint256 feeAmount, uint256 amountAfterFee) {
+        (feeAmount, amountAfterFee) = _computeFee(amountIn);
+
+        if (feeAmount > 0) {
+            // slither-disable-next-line arbitrary-send-eth
+            (bool sent, ) = feeWallet.call{value: feeAmount, gas: FEE_WALLET_CALL_GAS_LIMIT}("");
+            if (!sent) {
+                pendingEthFeesByWallet[feeWallet] += feeAmount;
+                totalPendingEthFees += feeAmount;
+                emit FeeWalletTransferFailed(feeWallet, feeAmount);
+            }
+        }
+    }
+
+    /// @dev A packed V3 path is `token(20) . fee(3) . token(20) [. fee(3) .
+    /// token(20) ...]` — valid multi-hop lengths are 43, 66, 89, ... i.e.
+    /// `20 + 23*hops` for `hops >= 1`.
+    function _validateV3MultiHopPath(bytes calldata v3Path) internal pure {
+        if (v3Path.length < 43) revert InvalidV3Path();
+        if ((v3Path.length - 20) % 23 != 0) revert InvalidV3Path();
+    }
+
+    function _decodeFirstToken(bytes calldata v3Path) internal pure returns (address token) {
+        token = address(bytes20(v3Path[0:20]));
+    }
+
+    function _decodeLastToken(bytes calldata v3Path) internal pure returns (address token) {
+        token = address(bytes20(v3Path[v3Path.length - 20:v3Path.length]));
+    }
     /// @dev Only meaningful if this contract is ever sent native ETH
     /// directly (e.g. leftover dust from a router refund path). Not part
     /// of the intended flow, but accepting rather than reverting avoids
