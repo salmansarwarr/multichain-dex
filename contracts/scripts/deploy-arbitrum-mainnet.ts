@@ -27,6 +27,13 @@
  *   confirmed against Uniswap's own deployments documentation
  *   (https://docs.uniswap.org/contracts/v2/reference/smart-contracts/v2-deployments)
  *   and cross-checked on Arbiscan before writing this script.
+ *
+ * 2026-10-05: now also wires Uniswap V3 (SwapRouter + WETH), same change as
+ * Ethereum mainnet — on Arbitrum nearly all liquidity is on V3. The V3
+ * SwapRouter/QuoterV2 sit at the same addresses as on Ethereum (verified
+ * against Sourcify's chain-42161 records); WETH was read from both
+ * routers' own WETH()/WETH9(). The previous (V2-only) contract's record is
+ * preserved in arbitrum-mainnet.json's `previousDeployments`.
  */
 
 import { ethers, network } from "hardhat";
@@ -35,6 +42,10 @@ import * as path from "path";
 
 // Uniswap V2 Router02 on Arbitrum One — NOT the same address as mainnet.
 const UNISWAP_ROUTER_ARBITRUM_ONE = "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24";
+
+// Uniswap V3's original SwapRouter (params struct includes `deadline`) and WETH.
+const UNISWAP_V3_SWAP_ROUTER_ARBITRUM_ONE = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
+const WETH_ARBITRUM_ONE = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
 
 // Fee in basis points: 15 = 0.15%
 const FEE_BPS = 15;
@@ -78,6 +89,8 @@ async function main() {
   console.log(`Balance   : ${ethers.formatEther(await ethers.provider.getBalance(deployer.address))} ETH`);
   console.log(`Network   : ${networkName} (chain ${(await ethers.provider.getNetwork()).chainId})`);
   console.log(`Router    : ${UNISWAP_ROUTER_ARBITRUM_ONE}`);
+  console.log(`V3 router : ${UNISWAP_V3_SWAP_ROUTER_ARBITRUM_ONE}`);
+  console.log(`WETH      : ${WETH_ARBITRUM_ONE}`);
   console.log(`Fee wallet: ${feeWallet}`);
   console.log(`Owner     : ${owner}`);
   console.log(`Fee bps   : ${FEE_BPS} (${FEE_BPS / 100}%)`);
@@ -88,8 +101,8 @@ async function main() {
   console.log("Deploying EthFeeRouter...");
   const ethFeeRouter = await EthFeeRouterFactory.deploy(
     UNISWAP_ROUTER_ARBITRUM_ONE,
-    ethers.ZeroAddress, // v3Router: V3 not wired on this chain yet
-    ethers.ZeroAddress, // wrappedNative
+    UNISWAP_V3_SWAP_ROUTER_ARBITRUM_ONE,
+    WETH_ARBITRUM_ONE,
     feeWallet,
     FEE_BPS,
     owner
@@ -128,6 +141,12 @@ async function main() {
     fs.mkdirSync(deploymentsDir, { recursive: true });
   }
 
+  const outputPath = path.join(deploymentsDir, "arbitrum-mainnet.json");
+  const previous = fs.existsSync(outputPath) ? JSON.parse(fs.readFileSync(outputPath, "utf8")) : null;
+  const previousDeployments = previous
+    ? [...(previous.previousDeployments ?? []), { ...previous, previousDeployments: undefined }]
+    : [];
+
   const record = {
     network: "arbitrumOne",
     chainId: 42161,
@@ -137,13 +156,15 @@ async function main() {
     deployedAt: new Date().toISOString(),
     constructorArgs: {
       uniswapRouter: UNISWAP_ROUTER_ARBITRUM_ONE,
+      v3Router: UNISWAP_V3_SWAP_ROUTER_ARBITRUM_ONE,
+      wrappedNative: WETH_ARBITRUM_ONE,
       feeWallet,
       feeBps: FEE_BPS,
       initialOwner: owner,
     },
+    previousDeployments,
   };
 
-  const outputPath = path.join(deploymentsDir, "arbitrum-mainnet.json");
   fs.writeFileSync(outputPath, JSON.stringify(record, null, 2));
   console.log(`\nDeployment record saved to: ${outputPath}`);
 

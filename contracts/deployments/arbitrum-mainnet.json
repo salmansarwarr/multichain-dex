@@ -2,13 +2,31 @@
   "network": "arbitrumOne",
   "chainId": 42161,
   "contract": "EthFeeRouter",
-  "address": "0x82f89bBD87c75F915736E5d346dD48f40d66c8e0",
-  "deployTxHash": "0xeb71e30dffdbca35064d701d1afc3a60d65eb31a8bfe60d77d8d34ef3c5b32e5",
-  "deployedAt": "2026-08-22T18:09:05.325Z",
+  "address": "0xFBa5A8fCb59b97C6bc398C1e8D7cE191ee0a3B11",
+  "deployTxHash": "0x6ecbee7eac145ddbdccacc09d6e564ac93c83db6d7ecb551d708ae37de1777d1",
+  "deployedAt": "2026-10-05T02:16:04.202Z",
   "constructorArgs": {
     "uniswapRouter": "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+    "v3Router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+    "wrappedNative": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
     "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
     "feeBps": 15,
     "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
-  }
+  },
+  "previousDeployments": [
+    {
+      "network": "arbitrumOne",
+      "chainId": 42161,
+      "contract": "EthFeeRouter",
+      "address": "0x82f89bBD87c75F915736E5d346dD48f40d66c8e0",
+      "deployTxHash": "0xeb71e30dffdbca35064d701d1afc3a60d65eb31a8bfe60d77d8d34ef3c5b32e5",
+      "deployedAt": "2026-08-22T18:09:05.325Z",
+      "constructorArgs": {
+        "uniswapRouter": "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24",
+        "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+        "feeBps": 15,
+        "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+      }
+    }
+  ]
 }

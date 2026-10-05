@@ -36,7 +36,7 @@ export const contracts = {
   // Deployed 2026-08-22, source-verified on Arbiscan. Owner/fee-wallet
   // confirmed live via on-chain reads 2026-08-23 — see docs/deployments.md.
   arbitrumOne: {
-    feeRouter: (process.env.NEXT_PUBLIC_ARB_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x82f89bBD87c75F915736E5d346dD48f40d66c8e0',
+    feeRouter: (process.env.NEXT_PUBLIC_ARB_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0xFBa5A8fCb59b97C6bc398C1e8D7cE191ee0a3B11',
     chainId: customArbitrumOne.id,
   },
 } as const;

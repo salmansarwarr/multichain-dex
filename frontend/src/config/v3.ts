@@ -4,7 +4,8 @@ import { contracts } from './contracts';
 /// Per-chain V3 quoting config. Both quoters are QuoterV2 deployments with
 /// identical ABIs (PancakeSwap's V3 periphery is a fork of Uniswap's), each
 /// cross-checked against Sourcify's verified record for its chain: BSC
-/// (chain 56) on 2026-09-29, Ethereum (chain 1) on 2026-10-04.
+/// (chain 56) on 2026-09-29, Ethereum (chain 1) on 2026-10-04, Arbitrum
+/// (chain 42161) on 2026-10-05.
 ///
 /// Fee tiers are in hundredths of a basis point (500 = 0.05%, 10000 = 1%).
 /// A token's real pool can sit at any of a chain's tiers, so useEvmQuote
@@ -18,6 +19,11 @@ const V3_CONFIG: Record<number, V3Config> = {
     feeTiers: [100, 500, 2500, 10000],
   },
   [contracts.mainnet.chainId]: {
+    quoter: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
+    feeTiers: [100, 500, 3000, 10000],
+  },
+  // Same Uniswap QuoterV2 address as Ethereum (Sourcify chain 42161, 2026-10-05).
+  [contracts.arbitrumOne.chainId]: {
     quoter: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
     feeTiers: [100, 500, 3000, 10000],
   },

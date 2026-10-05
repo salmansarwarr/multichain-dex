@@ -962,6 +962,12 @@ export const ETH_MAINNET_TOKENS: Token[] = [
 // Arbitrum but no V2 pool, and this app only routes through V2, so every
 // quote attempt reverted with "no route found". See that comment for
 // detail; same fix applies here.
+// 2026-10-05: Arbitrum gets Uniswap V3 routing (same EthFeeRouter change as
+// Ethereum). Re-quoted at 0.1 ETH vs GeckoTerminal's market price (our 0.15%
+// fee included): V2-only, 15 of 16 tokens were 1.3% to 100% off; with V3,
+// 13 are within ~1% (ZRO at 1.02%). Removed LDO (-1.3%), COMP (-12%) and
+// BONK (-84%), which no V2/V3 route can price within 1%. Of the eight
+// removed 2026-09-28 (above), only CRV (-0.2%) is now within 1% — restored.
 export const ARBITRUM_MAINNET_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -1042,13 +1048,6 @@ export const ARBITRUM_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/35958/large/etherfi.jpeg?1710254562',
   },
   {
-    address: '0x13ad51ed4f1b7e9dc168d8a00cb3f4ddd85efa60',
-    symbol: 'LDO',
-    name: 'Lido DAO',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/13573/large/Lido_DAO.png?1696513326',
-  },
-  {
     address: '0x6985884c4392d348587b19cb9eaaf157f13271cd',
     symbol: 'ZRO',
     name: 'LayerZero',
@@ -1063,13 +1062,6 @@ export const ARBITRUM_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/15069/large/Pendle_Logo_Normal-03.png?1696514728',
   },
   {
-    address: '0x09199d9a5f4448d0848e4395d065e1ad9c4a1f74',
-    symbol: 'BONK',
-    name: 'Bonk',
-    decimals: 5,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/28600/large/bonk.jpg?1696527587',
-  },
-  {
     address: '0x9623063377ad1b27544c965ccd7342f7ea7e88c7',
     symbol: 'GRT',
     name: 'The Graph',
@@ -1077,17 +1069,17 @@ export const ARBITRUM_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/13397/large/Graph_Token.png?1696513159',
   },
   {
-    address: '0x354a6da3fcde098f8389cad84b0182725c6c91de',
-    symbol: 'COMP',
-    name: 'Compound',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/10775/large/COMP.png?1696510737',
-  },
-  {
     address: '0xcb8b5cd20bdcaea9a010ac1f8d835824f5c87a04',
     symbol: 'COW',
     name: 'CoW Protocol',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/24384/large/CoW-token_logo.png?1719524382',
+  },
+  {
+    address: '0x11cdb42b0eb46d95f990bedd4695a6e3fa034978',
+    symbol: 'CRV',
+    name: 'Curve DAO',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/12124/large/Curve.png?1696511967',
   },
 ];
