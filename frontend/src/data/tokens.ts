@@ -968,6 +968,14 @@ export const ETH_MAINNET_TOKENS: Token[] = [
 // 13 are within ~1% (ZRO at 1.02%). Removed LDO (-1.3%), COMP (-12%) and
 // BONK (-84%), which no V2/V3 route can price within 1%. Of the eight
 // removed 2026-09-28 (above), only CRV (-0.2%) is now within 1% — restored.
+// 2026-10-06: client asked for 30 more. Official Arbitrum addresses from
+// CoinGecko; quoted at 0.1 ETH through the app's V2/V3 routes. Added WBTC
+// (-0.2%), LPT (-0.3/-0.75%) and LDO back (-0.3/-0.9% today; it was -1.3%
+// on 2026-10-05, so borderline). SOL, MATIC/POL, OP, ICP, ENS, IMX, SNX and
+// ARKM have no official Arbitrum token. The rest are 3-100% off or have no
+// Uniswap pool: CAKE/SUSHI live on SushiSwap V3, FLUID on Fluid DEX,
+// WOO/POND/ENA/COMP mostly on Uniswap V4, RSR on Curve; XVS, ANKR, TRB,
+// MLN, RPL, 1INCH, DODO, LRC, AXL, APE have under ~$100k anywhere.
 export const ARBITRUM_MAINNET_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -1081,5 +1089,27 @@ export const ARBITRUM_MAINNET_TOKENS: Token[] = [
     name: 'Curve DAO',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/12124/large/Curve.png?1696511967',
+  },
+  {
+    // Arbitrum's canonical-bridge WBTC (CoinGecko: arbitrum-bridged-wbtc-arbitrum-one).
+    address: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f',
+    symbol: 'WBTC',
+    name: 'Wrapped Bitcoin',
+    decimals: 8,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/7598/large/WBTCLOGO.png?1764496367',
+  },
+  {
+    address: '0x289ba1701C2F088cf0faf8B3705246331cB8A839',
+    symbol: 'LPT',
+    name: 'Livepeer',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/7137/large/badge-logo-circuit-green.png?1719357686',
+  },
+  {
+    address: '0x13ad51ed4f1b7e9dc168d8a00cb3f4ddd85efa60',
+    symbol: 'LDO',
+    name: 'Lido DAO',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/13573/large/Lido_DAO.png?1696513326',
   },
 ];
