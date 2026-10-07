@@ -47,6 +47,11 @@ const UNISWAP_ROUTER_ARBITRUM_ONE = "0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24"
 const UNISWAP_V3_SWAP_ROUTER_ARBITRUM_ONE = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
 const WETH_ARBITRUM_ONE = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
 
+// KyberSwap MetaAggregationRouterV2 — same address on BSC, Ethereum and
+// Arbitrum (verified on Sourcify for chains 56/1/42161). Allowlisted at deploy
+// for swapViaAggregatorWithFee; the owner can change the allowlist later.
+const KYBERSWAP_ROUTER = "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5";
+
 // Fee in basis points: 15 = 0.15%
 const FEE_BPS = 15;
 
@@ -91,6 +96,7 @@ async function main() {
   console.log(`Router    : ${UNISWAP_ROUTER_ARBITRUM_ONE}`);
   console.log(`V3 router : ${UNISWAP_V3_SWAP_ROUTER_ARBITRUM_ONE}`);
   console.log(`WETH      : ${WETH_ARBITRUM_ONE}`);
+  console.log(`Aggregator: ${KYBERSWAP_ROUTER}`);
   console.log(`Fee wallet: ${feeWallet}`);
   console.log(`Owner     : ${owner}`);
   console.log(`Fee bps   : ${FEE_BPS} (${FEE_BPS / 100}%)`);
@@ -103,6 +109,7 @@ async function main() {
     UNISWAP_ROUTER_ARBITRUM_ONE,
     UNISWAP_V3_SWAP_ROUTER_ARBITRUM_ONE,
     WETH_ARBITRUM_ONE,
+    KYBERSWAP_ROUTER,
     feeWallet,
     FEE_BPS,
     owner
@@ -158,6 +165,7 @@ async function main() {
       uniswapRouter: UNISWAP_ROUTER_ARBITRUM_ONE,
       v3Router: UNISWAP_V3_SWAP_ROUTER_ARBITRUM_ONE,
       wrappedNative: WETH_ARBITRUM_ONE,
+      aggregatorRouter: KYBERSWAP_ROUTER,
       feeWallet,
       feeBps: FEE_BPS,
       initialOwner: owner,

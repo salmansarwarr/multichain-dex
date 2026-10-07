@@ -72,6 +72,7 @@ async function main() {
     PANCAKE_ROUTER_BSC_TESTNET,
     PANCAKE_V3_ROUTER_BSC_TESTNET,
     WBNB_BSC_TESTNET,
+    ethers.ZeroAddress, // aggregatorRouter: none on testnet
     feeWallet,
     FEE_BPS,
     deployer.address // initialOwner
@@ -117,6 +118,7 @@ async function main() {
       pancakeRouter: PANCAKE_ROUTER_BSC_TESTNET,
       v3Router: PANCAKE_V3_ROUTER_BSC_TESTNET,
       wrappedNative: WBNB_BSC_TESTNET,
+      aggregatorRouter: "0x0000000000000000000000000000000000000000",
       feeWallet,
       feeBps: FEE_BPS,
       initialOwner: deployer.address,

@@ -44,6 +44,11 @@ const UNISWAP_ROUTER_ETH_MAINNET = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
 const UNISWAP_V3_SWAP_ROUTER_ETH_MAINNET = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
 const WETH_ETH_MAINNET = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 
+// KyberSwap MetaAggregationRouterV2 — same address on BSC, Ethereum and
+// Arbitrum (verified on Sourcify for chains 56/1/42161). Allowlisted at deploy
+// for swapViaAggregatorWithFee; the owner can change the allowlist later.
+const KYBERSWAP_ROUTER = "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5";
+
 // Fee in basis points: 15 = 0.15%
 const FEE_BPS = 15;
 
@@ -88,6 +93,7 @@ async function main() {
   console.log(`Router    : ${UNISWAP_ROUTER_ETH_MAINNET}`);
   console.log(`V3 router : ${UNISWAP_V3_SWAP_ROUTER_ETH_MAINNET}`);
   console.log(`WETH      : ${WETH_ETH_MAINNET}`);
+  console.log(`Aggregator: ${KYBERSWAP_ROUTER}`);
   console.log(`Fee wallet: ${feeWallet}`);
   console.log(`Owner     : ${owner}`);
   console.log(`Fee bps   : ${FEE_BPS} (${FEE_BPS / 100}%)`);
@@ -95,15 +101,49 @@ async function main() {
 
   const EthFeeRouterFactory = await ethers.getContractFactory("EthFeeRouter");
 
-  console.log("Deploying EthFeeRouter...");
-  const ethFeeRouter = await EthFeeRouterFactory.deploy(
+  const ctorArgs = [
     UNISWAP_ROUTER_ETH_MAINNET,
     UNISWAP_V3_SWAP_ROUTER_ETH_MAINNET,
     WETH_ETH_MAINNET,
+    KYBERSWAP_ROUTER,
     feeWallet,
     FEE_BPS,
-    owner
-  );
+    owner,
+  ] as const;
+
+  // Optional gas-price cap: DEPLOY_MAX_FEE_GWEI=0.175 waits (polling every
+  // 30s, locally — nothing sits in the mempool) until the base fee plus
+  // tip fits under the cap, then sends with maxFeePerGas = the cap, so the
+  // deploy can never cost more than gasLimit x cap.
+  const overrides: Record<string, bigint> = {};
+  const capGwei = process.env.DEPLOY_MAX_FEE_GWEI;
+  if (capGwei) {
+    const cap = ethers.parseUnits(capGwei, "gwei");
+    const tip = ethers.parseUnits(process.env.DEPLOY_TIP_GWEI || "0.005", "gwei");
+    const deployTx = await EthFeeRouterFactory.getDeployTransaction(...ctorArgs);
+    const gasLimit = ((await ethers.provider.estimateGas({ ...deployTx, from: deployer.address })) * 102n) / 100n;
+    console.log(`Gas cap   : ${capGwei} gwei, limit ${gasLimit} gas -> at most ${ethers.formatEther(gasLimit * cap)} ETH`);
+    for (;;) {
+      const base = (await ethers.provider.getBlock("latest"))!.baseFeePerGas!;
+      // Default: send once base + tip fits under the cap. The cap is the
+      // tx's own maxFeePerGas, so the cost can never exceed it either way;
+      // DEPLOY_CAP_HEADROOM=true also leaves room for one block's 12.5%
+      // base-fee rise, so the tx is less likely to wait in the mempool.
+      const headroom = process.env.DEPLOY_CAP_HEADROOM === "true" ? 1125n : 1000n;
+      if (((base * headroom) / 1000n) + tip <= cap) {
+        console.log(`Base fee ${ethers.formatUnits(base, "gwei")} gwei — sending.`);
+        break;
+      }
+      console.log(`${new Date().toISOString()} base fee ${ethers.formatUnits(base, "gwei")} gwei — waiting...`);
+      await new Promise((r) => setTimeout(r, 30_000));
+    }
+    overrides.maxFeePerGas = cap;
+    overrides.maxPriorityFeePerGas = tip;
+    overrides.gasLimit = gasLimit;
+  }
+
+  console.log("Deploying EthFeeRouter...");
+  const ethFeeRouter = await EthFeeRouterFactory.deploy(...ctorArgs, overrides);
 
   console.log(`Tx hash   : ${ethFeeRouter.deploymentTransaction()?.hash}`);
   console.log("Waiting for confirmations (5)...");
@@ -155,6 +195,7 @@ async function main() {
       uniswapRouter: UNISWAP_ROUTER_ETH_MAINNET,
       v3Router: UNISWAP_V3_SWAP_ROUTER_ETH_MAINNET,
       wrappedNative: WETH_ETH_MAINNET,
+      aggregatorRouter: KYBERSWAP_ROUTER,
       feeWallet,
       feeBps: FEE_BPS,
       initialOwner: owner,

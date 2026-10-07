@@ -47,6 +47,7 @@ async function deployFixture() {
     await mockRouter.getAddress(),
     await mockV3Router.getAddress(),
     await wrappedNative.getAddress(),
+    ethers.ZeroAddress,
     feeWallet.address,
     FEE_BPS,
     owner.address
@@ -97,11 +98,11 @@ describe("FeeRouter", function () {
       const [owner, feeWallet] = await ethers.getSigners();
 
       await expect(
-        FeeRouter.deploy(ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, FEE_BPS, owner.address)
+        FeeRouter.deploy(ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, FEE_BPS, owner.address)
       ).to.be.revertedWithCustomError(FeeRouter, "ZeroAddress");
 
       await expect(
-        FeeRouter.deploy(owner.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, FEE_BPS, owner.address)
+        FeeRouter.deploy(owner.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, FEE_BPS, owner.address)
       ).to.be.revertedWithCustomError(FeeRouter, "ZeroAddress");
     });
 
@@ -110,7 +111,7 @@ describe("FeeRouter", function () {
       const [owner, feeWallet] = await ethers.getSigners();
 
       await expect(
-        FeeRouter.deploy(owner.address, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, MAX_FEE_BPS + 1n, owner.address)
+        FeeRouter.deploy(owner.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, MAX_FEE_BPS + 1n, owner.address)
       )
         .to.be.revertedWithCustomError(FeeRouter, "FeeExceedsCap")
         .withArgs(MAX_FEE_BPS + 1n, MAX_FEE_BPS);
@@ -122,6 +123,7 @@ describe("FeeRouter", function () {
 
       const feeRouter = await FeeRouter.deploy(
         owner.address,
+        ethers.ZeroAddress,
         ethers.ZeroAddress,
         ethers.ZeroAddress,
         feeWallet.address,
@@ -641,6 +643,7 @@ describe("FeeRouter", function () {
         await mockRouter.getAddress(),
         ethers.ZeroAddress,
         ethers.ZeroAddress,
+        ethers.ZeroAddress,
         feeWallet.address,
         FEE_BPS,
         owner.address
@@ -793,6 +796,7 @@ describe("FeeRouter", function () {
         const noWrappedNative = await FeeRouter.deploy(
           await mockRouter.getAddress(),
           await mockV3Router.getAddress(),
+          ethers.ZeroAddress,
           ethers.ZeroAddress,
           feeWallet.address,
           FEE_BPS,

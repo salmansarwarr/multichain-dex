@@ -112,6 +112,7 @@ describeOrSkip("EthFeeRouter — Ethereum mainnet fork (Phase 2 manual gate)", f
       UNISWAP_V2_ROUTER02,
       UNISWAP_V3_SWAP_ROUTER,
       WETH,
+      ethers.ZeroAddress,
       feeWallet.address,
       15, // 0.15%
       deployer.address
@@ -154,6 +155,7 @@ describeOrSkip("EthFeeRouter — Ethereum mainnet fork (Phase 2 manual gate)", f
       UNISWAP_V2_ROUTER02,
       UNISWAP_V3_SWAP_ROUTER,
       WETH,
+      ethers.ZeroAddress,
       feeWallet.address,
       15,
       deployer.address

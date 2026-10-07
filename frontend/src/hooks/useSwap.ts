@@ -5,6 +5,8 @@ import { FeeRouterABI } from '../abis/FeeRouter';
 import { EthFeeRouterABI } from '../abis/EthFeeRouter';
 import { contracts, getFeeRouterAddress } from '../config/contracts';
 import { NATIVE_TOKEN_ADDRESS } from '../data/tokens';
+import { buildKyberSwap, getAggregatorChain } from '../config/aggregator';
+import type { AggregatorRoute } from './useEvmQuote';
 
 export type SwapState = 'IDLE' | 'SWAPPING' | 'SUCCESS' | 'ERROR';
 
@@ -47,9 +49,13 @@ export function useSwap() {
     // configured fee-router contract reports a non-zero v3Router(). When
     // 'v3', `v3Fee` (useEvmQuote's `v3Fee`) must be the winning pool's fee
     // tier — required by the V3 functions' `fee` param, meaningless for V2.
-    quoteVersion: 'v2' | 'v3' | 'v3-multihop' = 'v2',
+    quoteVersion: 'v2' | 'v3' | 'v3-multihop' | 'aggregator' = 'v2',
     v3Fee: number | null = null,
-    v3Path: `0x${string}` | null = null
+    v3Path: `0x${string}` | null = null,
+    // When 'aggregator': the KyberSwap route from useEvmQuote, rebuilt into
+    // fresh calldata here (routes expire), plus the user's slippage in bps.
+    aggregatorRoute: AggregatorRoute | null = null,
+    slippageBps: number = 50
   ) => {
     setState('SWAPPING');
     setError(null);
@@ -83,7 +89,20 @@ export function useSwap() {
       // app has no BNB-out V3 wiring yet, same gap noted below for
       // single-hop, so that case falls through to the *ForTokens variant
       // same as before).
-      if (quoteVersion === 'v3-multihop' && v3Path !== null) {
+      if (quoteVersion === 'aggregator' && aggregatorRoute !== null) {
+        const chain = getAggregatorChain(chainId);
+        if (!chain) throw new Error('Aggregator not supported on this chain');
+        const built = await buildKyberSwap(chain, aggregatorRoute.routeSummary, feeRouterAddress, slippageBps);
+        // amountOutMin (from the quote shown to the user) is enforced by the
+        // contract against what it actually receives, whatever the calldata.
+        await writeContractAsync({
+          address: feeRouterAddress,
+          abi,
+          functionName: 'swapViaAggregatorWithFee',
+          args: [aggregatorRoute.tokenIn, amountIn, aggregatorRoute.tokenOut, amountOutMin, built.router, built.data, recipient, deadline],
+          value: isNativeIn ? amountIn : 0n,
+        });
+      } else if (quoteVersion === 'v3-multihop' && v3Path !== null) {
         if (isNativeIn) {
           await writeContractAsync({
             address: feeRouterAddress,

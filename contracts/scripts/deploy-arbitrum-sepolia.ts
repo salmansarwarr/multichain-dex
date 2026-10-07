@@ -98,6 +98,7 @@ async function main() {
     mockRouterAddress,
     ethers.ZeroAddress, // v3Router: V3 not wired on this chain yet
     ethers.ZeroAddress, // wrappedNative
+    ethers.ZeroAddress, // aggregatorRouter
     feeWallet,
     FEE_BPS,
     deployer.address // initialOwner

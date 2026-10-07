@@ -38,6 +38,7 @@ async function deployFixture() {
     await mockRouter.getAddress(),
     await mockV3Router.getAddress(),
     await wrappedNative.getAddress(),
+    ethers.ZeroAddress,
     feeWallet.address,
     FEE_BPS,
     owner.address
@@ -86,7 +87,7 @@ describe("EthFeeRouter", function () {
       const [owner, feeWallet] = await ethers.getSigners();
 
       await expect(
-        EthFeeRouter.deploy(ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, FEE_BPS, owner.address)
+        EthFeeRouter.deploy(ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, FEE_BPS, owner.address)
       ).to.be.revertedWithCustomError(EthFeeRouter, "ZeroAddress");
     });
 
@@ -95,7 +96,7 @@ describe("EthFeeRouter", function () {
       const [owner, feeWallet] = await ethers.getSigners();
 
       await expect(
-        EthFeeRouter.deploy(owner.address, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, MAX_FEE_BPS + 1n, owner.address)
+        EthFeeRouter.deploy(owner.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, feeWallet.address, MAX_FEE_BPS + 1n, owner.address)
       )
         .to.be.revertedWithCustomError(EthFeeRouter, "FeeExceedsCap")
         .withArgs(MAX_FEE_BPS + 1n, MAX_FEE_BPS);
@@ -498,6 +499,7 @@ describe("EthFeeRouter", function () {
         await mockRouter.getAddress(),
         ethers.ZeroAddress,
         ethers.ZeroAddress,
+        ethers.ZeroAddress,
         feeWallet.address,
         FEE_BPS,
         owner.address
@@ -650,6 +652,7 @@ describe("EthFeeRouter", function () {
         const noWrappedNative = await EthFeeRouter.deploy(
           await mockRouter.getAddress(),
           await mockV3Router.getAddress(),
+          ethers.ZeroAddress,
           ethers.ZeroAddress,
           feeWallet.address,
           FEE_BPS,

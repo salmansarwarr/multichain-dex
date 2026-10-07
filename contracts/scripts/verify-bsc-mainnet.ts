@@ -49,6 +49,7 @@ async function main() {
             constructorArgs.pancakeRouter,
             constructorArgs.v3Router,
             constructorArgs.wrappedNative,
+            constructorArgs.aggregatorRouter,
             constructorArgs.feeWallet,
             constructorArgs.feeBps,
             constructorArgs.initialOwner,

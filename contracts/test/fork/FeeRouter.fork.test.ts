@@ -105,7 +105,7 @@ describeOrSkip("FeeRouter — BSC mainnet fork (Phase 1 manual gate)", function 
     const feeRouter = await FeeRouter.deploy(
       PANCAKE_ROUTER_V2,
       ethers.ZeroAddress, // v3Router — not needed for this V2-only test
-      ethers.ZeroAddress, // wrappedNative — likewise
+      ethers.ZeroAddress, ethers.ZeroAddress, // wrappedNative — likewise
       feeWallet.address,
       15, // 0.15%
       deployer.address
@@ -165,6 +165,7 @@ describeOrSkip("FeeRouter — BSC mainnet fork (Phase 1 manual gate)", function 
       PANCAKE_ROUTER_V2,
       PANCAKE_V3_ROUTER,
       WBNB,
+      ethers.ZeroAddress,
       feeWallet.address,
       15, // 0.15%
       deployer.address

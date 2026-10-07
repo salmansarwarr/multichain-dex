@@ -2,13 +2,14 @@
   "network": "ethMainnet",
   "chainId": 1,
   "contract": "EthFeeRouter",
-  "address": "0x0766dEf109f1a78B2a13b0Bbc8f3E4c9E477fF09",
-  "deployTxHash": "0xf1382ff4959656c9e0cfaee6a41231d2daea2dd60c5292737d4ce9bfff535e4c",
-  "deployedAt": "2026-10-04T12:36:02.777Z",
+  "address": "0x21a179A51F0059812AB79b802595feF576cdEC77",
+  "deployTxHash": "0xd3cbc175dc62c8cc226dcd125b082056c340c24e515f3c5c381c5b33975a8ead",
+  "deployedAt": "2026-10-07T03:13:00.902Z",
   "constructorArgs": {
     "uniswapRouter": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
     "v3Router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
     "wrappedNative": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "aggregatorRouter": "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",
     "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
     "feeBps": 15,
     "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
@@ -28,6 +29,22 @@
       },
       "constructorArgs": {
         "uniswapRouter": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+        "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
+        "feeBps": 15,
+        "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"
+      }
+    },
+    {
+      "network": "ethMainnet",
+      "chainId": 1,
+      "contract": "EthFeeRouter",
+      "address": "0x0766dEf109f1a78B2a13b0Bbc8f3E4c9E477fF09",
+      "deployTxHash": "0xf1382ff4959656c9e0cfaee6a41231d2daea2dd60c5292737d4ce9bfff535e4c",
+      "deployedAt": "2026-10-04T12:36:02.777Z",
+      "constructorArgs": {
+        "uniswapRouter": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+        "v3Router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+        "wrappedNative": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
         "feeWallet": "0x12e260D0a664736593173f335FcDcc1076eEA4De",
         "feeBps": 15,
         "initialOwner": "0x937Cd31D806FC4Ebd9a5A70C34809482E3166b6b"

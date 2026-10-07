@@ -11,7 +11,7 @@ export const contracts = {
   // Deployed 2026-08-22, source-verified on BscScan. Owner/fee-wallet
   // confirmed live via on-chain reads 2026-08-23 — see docs/deployments.md.
   bscMainnet: {
-    feeRouter: (process.env.NEXT_PUBLIC_BSC_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0xBd018b76A06C51f000EB3DB6a1861384643D5E16',
+    feeRouter: (process.env.NEXT_PUBLIC_BSC_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x5b884E8b359838b955f745a5350DF376646CBB6A',
     chainId: customBsc.id,
   },
   sepolia: {
@@ -24,7 +24,7 @@ export const contracts = {
   // on Etherscan. Owner/fee-wallet/router confirmed live via on-chain reads
   // 2026-08-23 — see docs/deployments.md.
   mainnet: {
-    feeRouter: (process.env.NEXT_PUBLIC_ETH_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x0766dEf109f1a78B2a13b0Bbc8f3E4c9E477fF09',
+    feeRouter: (process.env.NEXT_PUBLIC_ETH_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0x21a179A51F0059812AB79b802595feF576cdEC77',
     chainId: customMainnet.id,
   },
   arbitrumSepolia: {
@@ -36,7 +36,7 @@ export const contracts = {
   // Deployed 2026-08-22, source-verified on Arbiscan. Owner/fee-wallet
   // confirmed live via on-chain reads 2026-08-23 — see docs/deployments.md.
   arbitrumOne: {
-    feeRouter: (process.env.NEXT_PUBLIC_ARB_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0xFBa5A8fCb59b97C6bc398C1e8D7cE191ee0a3B11',
+    feeRouter: (process.env.NEXT_PUBLIC_ARB_MAINNET_FEE_ROUTER_ADDRESS as Address) || '0xF0EDEfbd708e41222757679BE58d00ADED106921',
     chainId: customArbitrumOne.id,
   },
 } as const;

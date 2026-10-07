@@ -67,6 +67,15 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     /// then revert with `WrappedNativeNotSet`).
     IWETH public immutable wrappedNative;
 
+    /// @notice Sentinel aggregator APIs use for the chain's native currency
+    /// (ETH/BNB) in `swapViaAggregatorWithFee`'s tokenIn/tokenOut.
+    address public constant NATIVE_TOKEN = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
+    /// @notice DEX-aggregator routers `swapViaAggregatorWithFee` may call
+    /// (e.g. KyberSwap's MetaAggregationRouterV2). Owner-managed allowlist;
+    /// the router is never trusted for the result — see that function.
+    mapping(address => bool) public aggregatorRouters;
+
     address public feeWallet;
     uint256 public feeBps;
 
@@ -99,6 +108,7 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     event FeeWalletTransferFailed(address indexed feeWallet, uint256 amount);
     event FeesWithdrawn(address indexed claimant, address indexed token, address recipient, uint256 amount);
     event FundsRescued(address indexed token, address indexed to, uint256 amount);
+    event AggregatorRouterSet(address indexed router, bool allowed);
 
     error ZeroAmount();
     error ZeroAddress();
@@ -112,11 +122,15 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     error WrappedNativeNotSet();
     error InvalidV3Path();
     error ZeroFeeTier();
+    error RouterNotAllowed();
+    error InvalidAggregatorSwap();
+    error InsufficientOutput(uint256 received, uint256 minimum);
 
     constructor(
         address _uniswapRouter,
         address _v3Router,
         address _wrappedNative,
+        address _aggregatorRouter,
         address _feeWallet,
         uint256 _feeBps,
         address initialOwner
@@ -129,6 +143,10 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         v3Router = IPancakeV3SwapRouter(_v3Router);
         wrappedNative = IWETH(_wrappedNative);
+        if (_aggregatorRouter != address(0)) {
+            aggregatorRouters[_aggregatorRouter] = true;
+            emit AggregatorRouterSet(_aggregatorRouter, true);
+        }
         feeWallet = _feeWallet;
         feeBps = _feeBps;
     }
@@ -148,6 +166,14 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
         if (newFeeBps > MAX_FEE_BPS) revert FeeExceedsCap(newFeeBps, MAX_FEE_BPS);
         emit FeeUpdated(feeBps, newFeeBps);
         feeBps = newFeeBps;
+    }
+
+    /// @notice Allow or disallow a DEX-aggregator router for
+    /// `swapViaAggregatorWithFee`.
+    function setAggregatorRouter(address router, bool allowed) external onlyOwner {
+        if (router == address(0)) revert ZeroAddress();
+        aggregatorRouters[router] = allowed;
+        emit AggregatorRouterSet(router, allowed);
     }
 
     function setFeeWallet(address newFeeWallet) external onlyOwner {
@@ -664,6 +690,104 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------
+    // Swaps — DEX aggregator (added 2026-10-07)
+    // ---------------------------------------------------------------------
+
+    /// @notice Take the fee off `amountIn`, then execute a swap whose route
+    /// was built off-chain by a DEX aggregator (e.g. KyberSwap), reaching
+    /// venues the fixed V2/V3 functions above can't (Uniswap V4, PancakeSwap
+    /// Infinity, Curve, Camelot, ...). `data` must be built with this
+    /// contract as both sender and recipient, for `amountIn` minus the fee.
+    /// @dev The router is allowlisted but its result is not trusted: the
+    /// output is measured as this contract's own `tokenOut` balance delta,
+    /// checked against `amountOutMin`, and only then forwarded to `to`. The
+    /// router can only take what this call approves (or sends as value),
+    /// and any input it leaves unspent is refunded to the caller.
+    /// `tokenIn`/`tokenOut` use NATIVE_TOKEN for ETH/BNB.
+    function swapViaAggregatorWithFee(
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut,
+        uint256 amountOutMin,
+        address router,
+        bytes calldata data,
+        address to,
+        uint256 deadline
+    ) external payable nonReentrant whenNotPaused returns (uint256 amountOut) {
+        if (!aggregatorRouters[router]) revert RouterNotAllowed();
+        if (to == address(0) || tokenIn == address(0) || tokenOut == address(0)) revert ZeroAddress();
+        if (tokenIn == tokenOut) revert InvalidAggregatorSwap();
+        if (block.timestamp > deadline) revert DeadlineExpired();
+        if (tokenIn == NATIVE_TOKEN ? msg.value != amountIn : msg.value != 0) revert InvalidAggregatorSwap();
+
+        uint256 amountAfterFee = _skimAggregatorFee(tokenIn, amountIn, tokenOut, deadline);
+        amountOut = _runAggregator(tokenIn, tokenOut, router, data, amountAfterFee);
+        if (amountOut < amountOutMin) revert InsufficientOutput(amountOut, amountOutMin);
+        _sendOut(tokenOut, to, amountOut);
+    }
+
+    /// @dev Fee step for `swapViaAggregatorWithFee`, reusing the V3 helpers'
+    /// pull/skim logic. Emits SwapExecuted here (the event carries no output
+    /// amount; the whole tx reverts if the swap itself fails).
+    function _skimAggregatorFee(
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut,
+        uint256 deadline
+    ) internal returns (uint256 amountAfterFee) {
+        uint256 received;
+        uint256 feeAmount;
+        if (tokenIn == NATIVE_TOKEN) {
+            if (amountIn == 0) revert ZeroAmount();
+            received = amountIn;
+            (feeAmount, amountAfterFee) = _sendEthFeeOrQueue(amountIn);
+        } else {
+            (received, feeAmount, amountAfterFee) = _pullAndSkimFeeToken(amountIn, tokenIn, deadline);
+        }
+        emit SwapExecuted(
+            msg.sender,
+            tokenIn == NATIVE_TOKEN ? address(0) : tokenIn,
+            tokenOut == NATIVE_TOKEN ? address(0) : tokenOut,
+            received,
+            feeAmount
+        );
+    }
+
+    /// @dev Calls the allowlisted router with exactly `amountAfterFee` of
+    /// tokenIn available to it, refunds whatever it leaves unspent to the
+    /// caller, and returns the measured tokenOut received by this contract.
+    function _runAggregator(
+        address tokenIn,
+        address tokenOut,
+        address router,
+        bytes calldata data,
+        uint256 amountAfterFee
+    ) internal returns (uint256 amountOut) {
+        bool nativeIn = tokenIn == NATIVE_TOKEN;
+        if (!nativeIn) IERC20(tokenIn).forceApprove(router, amountAfterFee);
+
+        uint256 inBefore = _selfBalance(tokenIn);
+        uint256 outBefore = _selfBalance(tokenOut);
+
+        // Router is owner-allowlisted; everything it does is bounded by the
+        // approval/value above and checked by the balance deltas below.
+        // slither-disable-next-line arbitrary-send-eth,low-level-calls
+        (bool ok, bytes memory ret) = router.call{value: nativeIn ? amountAfterFee : 0}(data);
+        if (!ok) {
+            assembly {
+                revert(add(ret, 32), mload(ret))
+            }
+        }
+
+        if (!nativeIn) IERC20(tokenIn).forceApprove(router, 0);
+
+        uint256 spent = inBefore - _selfBalance(tokenIn);
+        if (spent < amountAfterFee) _sendOut(tokenIn, msg.sender, amountAfterFee - spent);
+
+        amountOut = _selfBalance(tokenOut) - outBefore;
+    }
+
+    // ---------------------------------------------------------------------
     // Internal
     // ---------------------------------------------------------------------
 
@@ -817,6 +941,21 @@ contract EthFeeRouter is Ownable, Pausable, ReentrancyGuard {
     function _decodeLastToken(bytes calldata v3Path) internal pure returns (address token) {
         token = address(bytes20(v3Path[v3Path.length - 20:v3Path.length]));
     }
+    function _selfBalance(address token) internal view returns (uint256) {
+        return token == NATIVE_TOKEN ? address(this).balance : IERC20(token).balanceOf(address(this));
+    }
+
+    function _sendOut(address token, address to, uint256 amount) internal {
+        if (amount == 0) return;
+        if (token == NATIVE_TOKEN) {
+            // slither-disable-next-line arbitrary-send-eth
+            (bool sent, ) = to.call{value: amount}("");
+            if (!sent) revert EthTransferFailed();
+        } else {
+            IERC20(token).safeTransfer(to, amount);
+        }
+    }
+
     /// @dev Only meaningful if this contract is ever sent native ETH
     /// directly (e.g. leftover dust from a router refund path). Not part
     /// of the intended flow, but accepting rather than reverting avoids

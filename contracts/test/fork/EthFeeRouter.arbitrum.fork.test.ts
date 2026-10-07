@@ -43,7 +43,7 @@ describeOrSkip("EthFeeRouter — Arbitrum One fork (Uniswap V3)", function () {
     const [deployer, feeWallet, user] = await ethers.getSigners();
     await network.provider.request({ method: "hardhat_setBalance", params: [user.address, ethers.toQuantity(ethers.parseEther("10"))] });
     const F = await ethers.getContractFactory("EthFeeRouter");
-    const router = await F.deploy(UNISWAP_V2_ROUTER02, UNISWAP_V3_SWAP_ROUTER, WETH, feeWallet.address, 15, deployer.address);
+    const router = await F.deploy(UNISWAP_V2_ROUTER02, UNISWAP_V3_SWAP_ROUTER, WETH, ethers.ZeroAddress, feeWallet.address, 15, deployer.address);
     const quoter = new ethers.Contract(UNISWAP_V3_QUOTER_V2, QUOTER_ABI, user);
     return { router, feeWallet, user, quoter };
   }

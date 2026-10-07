@@ -55,6 +55,11 @@ const PANCAKE_V3_ROUTER_BSC_MAINNET = "0x1b81D678ffb9C0263b24A97847620C99d213eB1
 // WBNB on BSC Mainnet.
 const WBNB_BSC_MAINNET = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
+// KyberSwap MetaAggregationRouterV2 — same address on BSC, Ethereum and
+// Arbitrum (verified on Sourcify for chains 56/1/42161). Allowlisted at deploy
+// for swapViaAggregatorWithFee; the owner can change the allowlist later.
+const KYBERSWAP_ROUTER = "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5";
+
 // Fee in basis points: 15 = 0.15%
 const FEE_BPS = 15;
 
@@ -99,6 +104,7 @@ async function main() {
   console.log(`Router    : ${PANCAKE_ROUTER_BSC_MAINNET}`);
   console.log(`V3 Router : ${PANCAKE_V3_ROUTER_BSC_MAINNET}`);
   console.log(`WBNB      : ${WBNB_BSC_MAINNET}`);
+  console.log(`Aggregator: ${KYBERSWAP_ROUTER}`);
   console.log(`Fee wallet: ${feeWallet}`);
   console.log(`Owner     : ${owner}`);
   console.log(`Fee bps   : ${FEE_BPS} (${FEE_BPS / 100}%)`);
@@ -111,6 +117,7 @@ async function main() {
     PANCAKE_ROUTER_BSC_MAINNET,
     PANCAKE_V3_ROUTER_BSC_MAINNET,
     WBNB_BSC_MAINNET,
+    KYBERSWAP_ROUTER,
     feeWallet,
     FEE_BPS,
     owner
@@ -156,6 +163,12 @@ async function main() {
     fs.mkdirSync(deploymentsDir, { recursive: true });
   }
 
+  const outputPath = path.join(deploymentsDir, "bsc-mainnet.json");
+  const previous = fs.existsSync(outputPath) ? JSON.parse(fs.readFileSync(outputPath, "utf8")) : null;
+  const previousDeployments = previous
+    ? [...(previous.previousDeployments ?? []), { ...previous, previousDeployments: undefined }]
+    : [];
+
   const record = {
     network: "bscMainnet",
     chainId: 56,
@@ -167,13 +180,14 @@ async function main() {
       pancakeRouter: PANCAKE_ROUTER_BSC_MAINNET,
       v3Router: PANCAKE_V3_ROUTER_BSC_MAINNET,
       wrappedNative: WBNB_BSC_MAINNET,
+      aggregatorRouter: KYBERSWAP_ROUTER,
       feeWallet,
       feeBps: FEE_BPS,
       initialOwner: owner,
     },
+    previousDeployments,
   };
 
-  const outputPath = path.join(deploymentsDir, "bsc-mainnet.json");
   fs.writeFileSync(outputPath, JSON.stringify(record, null, 2));
   console.log(`\nDeployment record saved to: ${outputPath}`);
 

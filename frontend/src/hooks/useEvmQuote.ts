@@ -10,12 +10,19 @@ import { NATIVE_TOKEN_ADDRESS } from '../data/tokens';
 import { getFeeRouterAddress, contracts } from '../config/contracts';
 import { getMinNativeReserveWei } from '../config/liquidity';
 import { getV3Config } from '../config/v3';
+import { getAggregatorChain, fetchKyberRoute, KYBERSWAP_ROUTER, KYBERSWAP_NATIVE, KyberRouteSummary } from '../config/aggregator';
 import { withRpcRetry } from './rpcRetry';
 
 // Quote reads are single quick calls, not a chunked scan, so a couple of
 // retries is enough to absorb a transient CU/s throttle without piling on.
 const MAX_RETRIES = 2;
 const BASE_DELAY_MS = 300;
+
+export type AggregatorRoute = {
+  routeSummary: KyberRouteSummary;
+  tokenIn: Address;
+  tokenOut: Address;
+};
 
 export function useEvmQuote(
   chainId: number | undefined,
@@ -81,9 +88,14 @@ export function useEvmQuote(
   // intermediate (mirroring V2's direct-vs-intermediate route-shopping
   // below) finds the real price. FeeRouter.sol already had the multi-hop
   // swap functions deployed; only the quoting side was missing.
-  const [quoteVersion, setQuoteVersion] = useState<'v2' | 'v3' | 'v3-multihop'>('v2');
+  // 'aggregator' (2026-10-07): the best route came from KyberSwap, which
+  // reaches venues the V2/V3 paths below can't (Uniswap V4, PancakeSwap
+  // Infinity, Curve, Camelot, ...). `aggregatorRoute` then carries what
+  // useSwap needs to build and send it via swapViaAggregatorWithFee.
+  const [quoteVersion, setQuoteVersion] = useState<'v2' | 'v3' | 'v3-multihop' | 'aggregator'>('v2');
   const [v3Fee, setV3Fee] = useState<number | null>(null);
   const [v3Path, setV3Path] = useState<`0x${string}` | null>(null);
+  const [aggregatorRoute, setAggregatorRoute] = useState<AggregatorRoute | null>(null);
   const publicClient = usePublicClient({ chainId });
   // Stable primitive for the effect's dependency array — intermediateTokens
   // is an array, and callers commonly pass a fresh one each render.
@@ -103,6 +115,7 @@ export function useEvmQuote(
         setQuoteVersion('v2');
         setV3Fee(null);
         setV3Path(null);
+        setAggregatorRoute(null);
         return;
       }
 
@@ -376,11 +389,64 @@ export function useEvmQuote(
           }
         }
 
-        if (successes.length === 0 && !v3Best && !v3MultiHopBest) {
+        // --- DEX-aggregator candidate (KyberSwap), on chains where the
+        // configured fee router allowlists KyberSwap's router (read
+        // on-chain, so an older contract without swapViaAggregatorWithFee
+        // simply never gets here). Skipped for fee-on-transfer tokens: the
+        // aggregator's calldata fixes an exact input amount, which a taxed
+        // transfer into the router would break.
+        let aggRoute: KyberRouteSummary | null = null;
+        const aggChain = getAggregatorChain(chainId);
+        const kyberIn = tokenIn === NATIVE_TOKEN_ADDRESS ? KYBERSWAP_NATIVE : tokenIn as Address;
+        const kyberOut = tokenOut === NATIVE_TOKEN_ADDRESS ? KYBERSWAP_NATIVE : tokenOut as Address;
+        if (aggChain && !(tokenInTaxBps ?? 0) && !(tokenOutTaxBps ?? 0)) {
+          try {
+            const allowed = await withRpcRetry(
+              () => publicClient.readContract({
+                address: feeRouterAddress,
+                abi: isBscFamily ? FeeRouterABI : EthFeeRouterABI,
+                functionName: 'aggregatorRouters',
+                args: [KYBERSWAP_ROUTER],
+              }),
+              MAX_RETRIES,
+              BASE_DELAY_MS,
+            ) as boolean;
+            if (allowed) aggRoute = await fetchKyberRoute(aggChain, kyberIn, kyberOut, amountInAfterFee);
+          } catch {
+            // Old contract (no aggregatorRouters()) or API unavailable —
+            // fall back to the V2/V3 routes alone.
+          }
+        }
+
+        if (successes.length === 0 && !v3Best && !v3MultiHopBest && !aggRoute) {
           throw attempts[0].err ?? new Error("No route found for this pair");
         }
 
         const v2Best = successes.length > 0 ? successes.reduce((a, b) => (b.out > a.out ? b : a)) : null;
+
+        // Use the aggregator only when it beats the best direct V2/V3 route
+        // by more than 0.1% — a direct route is cheaper in gas and has no
+        // off-chain dependency, so near-ties stay on it.
+        const onchainBest = [v2Best?.out, v3Best?.out, v3MultiHopBest?.out]
+          .reduce<bigint>((m, x) => (x !== undefined && x > m ? x : m), 0n);
+        const aggOut = aggRoute ? BigInt(aggRoute.amountOut) : 0n;
+        if (aggRoute && aggOut * 1000n > onchainBest * 1001n) {
+          if (active) {
+            setQuote(aggOut);
+            setPath(directPath as Address[]);
+            setQuoteVersion('aggregator');
+            setV3Fee(null);
+            setV3Path(null);
+            setAggregatorRoute({ routeSummary: aggRoute, tokenIn: kyberIn, tokenOut: kyberOut });
+            // KyberSwap prices both legs in USD from market data, so this
+            // is impact vs. the market rate, not just vs. one pool.
+            const inUsd = Number(aggRoute.amountInUsd);
+            const outUsd = Number(aggRoute.amountOutUsd);
+            setPriceImpactBps(inUsd > 0 && outUsd > 0 ? Math.max(0, Math.round((1 - outUsd / inUsd) * 10000)) : null);
+            setInsufficientLiquidity(false);
+          }
+          return;
+        }
 
         // Whichever version — and, within V3, whichever of direct/multi-hop
         // — gives the better raw output wins outright. Same "try every
@@ -413,6 +479,7 @@ export function useEvmQuote(
           setQuoteVersion(winnerVersion);
           setV3Fee(winnerVersion === 'v3' ? v3Best!.fee : null);
           setV3Path(winnerVersion === 'v3-multihop' ? v3MultiHopBest!.path : null);
+          setAggregatorRoute(null);
         }
 
         // Price impact vs. the winning path's current spot price — a real
@@ -604,6 +671,7 @@ export function useEvmQuote(
           setQuoteVersion('v2');
           setV3Fee(null);
           setV3Path(null);
+          setAggregatorRoute(null);
         }
       } finally {
         if (active) {
@@ -620,5 +688,5 @@ export function useEvmQuote(
     };
   }, [chainId, tokenIn, tokenOut, amountIn, intermediateTokensKey, publicClient, tokenInTaxBps, tokenOutTaxBps]);
 
-  return { quote, loading, error, priceImpactBps, insufficientLiquidity, path, quoteVersion, v3Fee, v3Path };
+  return { quote, loading, error, priceImpactBps, insufficientLiquidity, path, quoteVersion, v3Fee, v3Path, aggregatorRoute };
 }

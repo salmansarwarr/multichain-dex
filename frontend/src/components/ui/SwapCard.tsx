@@ -146,6 +146,7 @@ export function SwapCard() {
         quoteVersion,
         v3Fee,
         v3Path,
+        aggregatorRoute,
     } = useEvmQuote(
         expectedChainId,
         tokenIn?.address,
@@ -215,6 +216,8 @@ export function SwapCard() {
                 quoteVersion,
                 v3Fee,
                 v3Path,
+                aggregatorRoute,
+                Math.floor(slippageBps),
             );
         }
     };
