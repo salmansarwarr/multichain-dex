@@ -396,6 +396,8 @@ export function useEvmQuote(
         // aggregator's calldata fixes an exact input amount, which a taxed
         // transfer into the router would break.
         let aggRoute: KyberRouteSummary | null = null;
+        let aggRefRoute: KyberRouteSummary | null = null;
+        const aggRefAmount = amountInAfterFee / 1000n > 0n ? amountInAfterFee / 1000n : 1n;
         const aggChain = getAggregatorChain(chainId);
         const kyberIn = tokenIn === NATIVE_TOKEN_ADDRESS ? KYBERSWAP_NATIVE : tokenIn as Address;
         const kyberOut = tokenOut === NATIVE_TOKEN_ADDRESS ? KYBERSWAP_NATIVE : tokenOut as Address;
@@ -411,7 +413,14 @@ export function useEvmQuote(
               MAX_RETRIES,
               BASE_DELAY_MS,
             ) as boolean;
-            if (allowed) aggRoute = await fetchKyberRoute(aggChain, kyberIn, kyberOut, amountInAfterFee);
+            if (allowed) {
+              // Second, tiny quote (1/1000 of the trade) in parallel: its rate
+              // is ~the route's spot price, used for price impact below.
+              [aggRoute, aggRefRoute] = await Promise.all([
+                fetchKyberRoute(aggChain, kyberIn, kyberOut, amountInAfterFee),
+                fetchKyberRoute(aggChain, kyberIn, kyberOut, aggRefAmount).catch(() => null),
+              ]);
+            }
           } catch {
             // Old contract (no aggregatorRouters()) or API unavailable —
             // fall back to the V2/V3 routes alone.
@@ -438,11 +447,14 @@ export function useEvmQuote(
             setV3Fee(null);
             setV3Path(null);
             setAggregatorRoute({ routeSummary: aggRoute, tokenIn: kyberIn, tokenOut: kyberOut });
-            // KyberSwap prices both legs in USD from market data, so this
-            // is impact vs. the market rate, not just vs. one pool.
-            const inUsd = Number(aggRoute.amountInUsd);
-            const outUsd = Number(aggRoute.amountOutUsd);
-            setPriceImpactBps(inUsd > 0 && outUsd > 0 ? Math.max(0, Math.round((1 - outUsd / inUsd) * 10000)) : null);
+            // Same method as the V3 check below: scale the tiny reference
+            // quote's rate up to the trade size and compare. Not KyberSwap's
+            // amountIn/OutUsd: its USD prices for thin tokens can be several
+            // percent off (2026-10-11: ONT valued ~6% low, so a trade 0.8%
+            // under market showed a 6.4% warning).
+            const refOut = aggRefRoute ? BigInt(aggRefRoute.amountOut) : 0n;
+            const ideal = refOut > 0n ? (refOut * amountInAfterFee) / aggRefAmount : 0n;
+            setPriceImpactBps(ideal > 0n ? (ideal > aggOut ? Number(((ideal - aggOut) * 10000n) / ideal) : 0) : null);
             setInsufficientLiquidity(false);
           }
           return;
