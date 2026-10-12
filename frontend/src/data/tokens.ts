@@ -145,6 +145,11 @@ export const BSC_TESTNET_TOKENS: Token[] = [
 // same reason, one day after being restored above on the (in hindsight,
 // likely mistaken — possibly an Infinity pool momentarily misread as V3)
 // claim that it had real V3 liquidity.
+// 2026-10-12: removed BTT, ONT, PENDLE, ZRO, BONK, 1INCH, COMP and EOS.
+// Each has too little on-chain liquidity on BSC to trade within 1% of
+// market, on any route/exchange (confirmed via KyberSwap's full-market
+// aggregation, not just our own routing) — flagged to the client after a
+// BTT complaint, per the agreed 24h remediation plan.
 export const BSC_MAINNET_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -369,46 +374,11 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/5681/large/ASI.png?1719827289',
   },
   {
-    address: '0x6985884c4392d348587b19cb9eaaf157f13271cd',
-    symbol: 'ZRO',
-    name: 'LayerZero',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/28206/large/ftxG9_TJ_400x400.jpeg?1696527208',
-  },
-  {
-    address: '0xb3ed0a426155b79b898849803e3b36552f7ed507',
-    symbol: 'PENDLE',
-    name: 'Pendle',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/15069/large/Pendle_Logo_Normal-03.png?1696514728',
-  },
-  {
-    address: '0xa697e272a73744b343528c3bc4702f2565b2f422',
-    symbol: 'BONK',
-    name: 'Bonk',
-    decimals: 5,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/28600/large/bonk.jpg?1696527587',
-  },
-  {
-    address: '0x352cb5e19b12fc216548a2677bd0fce83bae434b',
-    symbol: 'BTT',
-    name: 'BitTorrent',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/22457/large/btt_logo.png?1696521780',
-  },
-  {
     address: '0x8b194370825e37b33373e74a41009161808c1488',
     symbol: 'VELVET',
     name: 'Velvet',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/67194/large/velvet.jpg?1752054592',
-  },
-  {
-    address: '0x52ce071bd9b1c4b00a0b92d298c512478cad67e8',
-    symbol: 'COMP',
-    name: 'Compound',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/10775/large/COMP.png?1696510737',
   },
   {
     address: '0x715d400f88c167884bbcc41c5fea407ed4d2f8a0',
@@ -423,13 +393,6 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     name: 'ApeCoin',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/24383/large/APECOIN.png?1756551529',
-  },
-  {
-    address: '0x111111111117dc0aa78b770fa6a738034120c302',
-    symbol: '1INCH',
-    name: '1INCH',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/13469/large/1inch-logo.jpeg?1759404663',
   },
   {
     address: '0x5bfdaa3f7c28b9994b56135403bf1acea02595b0',
@@ -487,13 +450,6 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/15776/large/filecoin.png?1696515400',
   },
   {
-    address: '0x56b6fB708fC5732DEC1Afc8D8556423A2EDcCbD6',
-    symbol: 'EOS',
-    name: 'Binance-Peg EOS',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/15771/large/eos-eos-logo.png?1696515395',
-  },
-  {
     address: '0x16939ef78684453bfDFb47825F8a5F714f12623a',
     symbol: 'XTZ',
     name: 'Binance-Peg Tezos',
@@ -517,13 +473,6 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     name: 'Binance-Peg Avalanche',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/18674/large/avax_logo_1.png?1696518143',
-  },
-  {
-    address: '0xFd7B3A77848f1C2D67E05E54d78d174a0C850335',
-    symbol: 'ONT',
-    name: 'Binance-Peg Ontology',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/18559/large/ont.png?1696518037',
   },
   {
     address: '0x9678E42ceBEb63F23197D726B29b1CB20d0064E5',
@@ -699,6 +648,9 @@ export const ARBITRUM_SEPOLIA_TOKENS: Token[] = [
 //   BNB (-5.2%), JASMY (-2.2%), BTT (-2.0%), GLM (-1.9%), IMX (-1.6%) and
 //   ID (-1.2%). CAKE, POL, FET, ALT, BIO, GRT and INJ measured 1.0-1.12%
 //   below market that day; kept and flagged to the client.
+// 2026-10-12: removed CAKE, POL, FET, ALT, BIO, GRT and INJ — each measured
+// 1.0-1.12% from market in testing (just over the 1% bar), per the agreed
+// remediation plan so every listed token tests within 1%.
 export const ETH_MAINNET_TOKENS: Token[] = [
   {
     address: NATIVE_TOKEN_ADDRESS,
@@ -856,13 +808,6 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/19785/large/ENS.jpg?1727872989',
   },
   {
-    address: '0xc944e90c64b2c07662a292be6244bdf05cda44a7',
-    symbol: 'GRT',
-    name: 'The Graph',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/13397/large/Graph_Token.png?1696513159',
-  },
-  {
     address: '0xc00e94cb662c3520282e6f5717214004a7f26888',
     symbol: 'COMP',
     name: 'Compound',
@@ -964,13 +909,6 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/31069/large/worldcoin.jpeg?1696529903',
   },
   {
-    address: '0x455e53cbb86018ac2b8092fdcd39d8444affc3f6',
-    symbol: 'POL',
-    name: 'POL (ex-MATIC)',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/32440/large/pol.png?1759114181',
-  },
-  {
     address: '0xb62132e35a6c13ee1ee0f84dc5d40bad8d815206',
     symbol: 'NEXO',
     name: 'NEXO',
@@ -978,32 +916,11 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/3695/large/CG-nexo-token-200x200_2x.png?1730414360',
   },
   {
-    address: '0x152649ea73beab28c5b49b26eb48f7ead6d4c898',
-    symbol: 'CAKE',
-    name: 'PancakeSwap',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/12632/large/pancakeswap-cake-logo_%281%29.png?1696512440',
-  },
-  {
-    address: '0xe28b3b32b6c345a34ff64674606124dd5aceca30',
-    symbol: 'INJ',
-    name: 'Injective',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/12882/large/Other_200x200.png?1738782212',
-  },
-  {
     address: '0xd533a949740bb3306d119cc777fa900ba034cd52',
     symbol: 'CRV',
     name: 'Curve DAO',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/12124/large/Curve.png?1696511967',
-  },
-  {
-    address: '0xaea46a60368a7bd060eec7df8cba43b7ef41ad85',
-    symbol: 'FET',
-    name: 'Artificial Superintelligence Alliance (FET)',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/5681/large/ASI.png?1719827289',
   },
   {
     address: '0xca14007eff0db1f8135f4c25b34de49ab0d42766',
@@ -1139,25 +1056,11 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/22228/large/nFPNiSbL_400x400.jpg?1696521570',
   },
   {
-    address: '0x8457ca5040ad67fdebbcc8edce889a335bc0fbfb',
-    symbol: 'ALT',
-    name: 'AltLayer',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/34608/large/Logomark_200x200.png?1715107868',
-  },
-  {
     address: '0x6033f7f88332b8db6ad452b7c6d5bb643990ae3f',
     symbol: 'LSK',
     name: 'Lisk',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/385/large/LSK-logo.png?1788508326',
-  },
-  {
-    address: '0xcb1592591996765ec0efc1f92599a19767ee5ffa',
-    symbol: 'BIO',
-    name: 'Bio Protocol',
-    decimals: 18,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/53022/large/bio.jpg?1735011002',
   },
   {
     address: '0xf8173a39c56a554837c4c7f104153a005d284d11',
