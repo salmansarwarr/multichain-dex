@@ -416,10 +416,17 @@ export function useEvmQuote(
             if (allowed) {
               // Second, tiny quote (1/1000 of the trade) in parallel: its rate
               // is ~the route's spot price, used for price impact below.
-              [aggRoute, aggRefRoute] = await Promise.all([
-                fetchKyberRoute(aggChain, kyberIn, kyberOut, amountInAfterFee),
+              const both = () => Promise.all([
+                fetchKyberRoute(aggChain, kyberIn, kyberOut, amountInAfterFee).catch(() => null),
                 fetchKyberRoute(aggChain, kyberIn, kyberOut, aggRefAmount).catch(() => null),
               ]);
+              [aggRoute, aggRefRoute] = await both();
+              // KyberSwap rate-limits per IP (~30 requests / 10s); one retry
+              // after a pause before falling back to the V2/V3 routes alone.
+              if (!aggRoute) {
+                await new Promise((r) => setTimeout(r, 1500));
+                [aggRoute, aggRefRoute] = await both();
+              }
             }
           } catch {
             // Old contract (no aggregatorRouters()) or API unavailable —

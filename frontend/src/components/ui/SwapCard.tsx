@@ -23,6 +23,25 @@ import { SwapButton } from "../swap/SwapButton";
 import { useEvmQuote } from "@/hooks/useEvmQuote";
 import { useTokenAllowance } from "@/hooks/useTokenAllowance";
 import { useSwap } from "@/hooks/useSwap";
+import { useLiquidityInfo, MAX_IMPACT } from "@/hooks/useLiquidityInfo";
+import { describeRoute } from "@/lib/routeLabel";
+
+/// Rounded *down* to 3 significant digits, so a suggested maximum shown to
+/// the user never exceeds the real one (typing it in must not re-trigger the
+/// notice).
+function fmtAmountDown(n: number): string {
+    if (n >= 1000) return Math.floor(n).toLocaleString();
+    const d = n >= 1 ? 2 : Math.max(0, 2 - Math.floor(Math.log10(n)));
+    return (Math.floor(n * 10 ** d + 1e-9) / 10 ** d).toFixed(d).replace(/\.?0+$/, "");
+}
+
+function fmtAmount(n: number): string {
+    if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return n.toLocaleString(undefined, { maximumSignificantDigits: 3 });
+}
+
+const CHAIN_NAMES: Record<string, string> = { bsc: "BNB Chain", ethereum: "Ethereum", arbitrum: "Arbitrum" };
 
 export function SwapCard() {
     const { activeTab } = useChainContext();
@@ -165,6 +184,28 @@ export function SwapCard() {
     // to let the user fire the swap past 15%.
     const isHighPriceImpact = priceImpactBps !== null && priceImpactBps >= 300;
     const isExtremePriceImpact = priceImpactBps !== null && priceImpactBps >= 1500;
+
+    // Pair liquidity and the largest amount that stays under 1% price
+    // impact, checked once when the pair is selected.
+    const { info: liquidity, loading: liquidityLoading } = useLiquidityInfo(expectedChainId, tokenIn, tokenOut, tokens);
+    const suggestedMaxIn =
+        liquidity?.depth && !liquidity.depth.aboveRange && amountInNumber > liquidity.depth.maxIn
+            ? liquidity.depth.maxIn
+            : null;
+
+    const route =
+        tokenIn && tokenOut && evmQuoteOut
+            ? describeRoute({
+                  isBsc: activeTab === "bsc",
+                  tokens,
+                  tokenIn,
+                  tokenOut,
+                  quoteVersion,
+                  path: evmQuotePath,
+                  v3Fee,
+                  aggregatorRoute,
+              })
+            : null;
 
     const amountOutDisplay =
         evmQuoteOut && tokenOut
@@ -348,6 +389,49 @@ export function SwapCard() {
                     {isExtremePriceImpact
                         ? `Price impact ~${(priceImpactBps! / 100).toFixed(1)}% — this pool has too little liquidity for this trade. Swap disabled to protect you.`
                         : `High price impact ~${(priceImpactBps! / 100).toFixed(1)}% — low liquidity for this pair, you may receive significantly less value than expected.`}
+                    {suggestedMaxIn !== null && tokenIn && (
+                        <div className="mt-1.5 font-normal">
+                            {isExtremePriceImpact
+                                ? `Reduce the amount to ~${fmtAmountDown(suggestedMaxIn)} ${tokenIn.symbol} or less to swap close to the market price.`
+                                : `Swap up to ~${fmtAmountDown(suggestedMaxIn)} ${tokenIn.symbol} to stay under ${MAX_IMPACT * 100}% price impact, or continue at this price.`}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {evmQuoteOut && !insufficientLiquidity && !isHighPriceImpact && suggestedMaxIn !== null && tokenIn && (
+                <div className="mt-4 p-3 rounded-xl border text-sm text-center bg-blue-500/10 border-blue-500/30 text-blue-300">
+                    Limited liquidity for this amount. Swap up to ~{fmtAmountDown(suggestedMaxIn)} {tokenIn.symbol} to stay under{" "}
+                    {MAX_IMPACT * 100}% price impact, or continue at this price.
+                </div>
+            )}
+
+            {route && (
+                <div className="mt-3 px-1 text-xs text-text-muted">
+                    <span className="text-white/80">Route:</span> {route.path.join(" → ")}
+                    <span className="block mt-0.5">
+                        via {route.venues.join(", ")}
+                        {route.splits > 1 ? ` (split across ${route.splits} routes)` : ""}
+                    </span>
+                </div>
+            )}
+
+            {tokenIn && tokenOut && (liquidityLoading || liquidity?.pool || liquidity?.depth) && (
+                <div className="mt-3 p-3 rounded-xl bg-surface-light border border-border text-xs text-text-muted space-y-1">
+                    {liquidityLoading && <div>Checking liquidity…</div>}
+                    {liquidity?.pool && (
+                        <div>
+                            <span className="text-white/80">{liquidity.pool.symbol} liquidity on {CHAIN_NAMES[activeTab]}:</span>{" "}
+                            ~${fmtAmount(liquidity.pool.usd)} (~{fmtAmount(liquidity.pool.tokenAmount)} {liquidity.pool.symbol})
+                        </div>
+                    )}
+                    {liquidity?.depth && (
+                        <div>
+                            <span className="text-white/80">Under {MAX_IMPACT * 100}% price impact:</span>{" "}
+                            {liquidity.depth.aboveRange ? "more than " : "up to "}~{fmtAmountDown(liquidity.depth.maxIn)} {tokenIn.symbol}
+                            {" "}(~{fmtAmount(liquidity.depth.maxOut)} {tokenOut.symbol})
+                        </div>
+                    )}
                 </div>
             )}
 
