@@ -185,11 +185,18 @@ export function SwapCard() {
     const isHighPriceImpact = priceImpactBps !== null && priceImpactBps >= 300;
     const isExtremePriceImpact = priceImpactBps !== null && priceImpactBps >= 1500;
 
-    // Pair liquidity and the largest amount that stays under 1% price
-    // impact, checked once when the pair is selected.
+    // Pair liquidity, the CoinGecko market rate and the largest amount that
+    // stays close to it, checked once when the pair is selected.
     const { info: liquidity, loading: liquidityLoading } = useLiquidityInfo(expectedChainId, tokenIn, tokenOut, tokens);
+    // How far this quote is below the market rate, before the 0.15% fee
+    // (shown separately). Not for tax tokens, whose quote includes the tax.
+    const marketDeviation =
+        evmQuoteOut && tokenIn && tokenOut && liquidity?.market && amountInNumber > 0 && !tokenIn.isFeeOnTransfer && !tokenOut.isFeeOnTransfer
+            ? 1 - Number(formatUnits(evmQuoteOut, tokenOut.decimals)) / (amountInNumber * 0.9985 * liquidity.market.rate)
+            : null;
+    const isOffMarket = marketDeviation !== null && marketDeviation > MAX_IMPACT;
     const suggestedMaxIn =
-        liquidity?.depth && !liquidity.depth.aboveRange && amountInNumber > liquidity.depth.maxIn
+        isOffMarket && liquidity?.depth && !liquidity.depth.aboveRange && liquidity.depth.maxIn > 0 && amountInNumber > liquidity.depth.maxIn
             ? liquidity.depth.maxIn
             : null;
 
@@ -393,16 +400,23 @@ export function SwapCard() {
                         <div className="mt-1.5 font-normal">
                             {isExtremePriceImpact
                                 ? `Reduce the amount to ~${fmtAmountDown(suggestedMaxIn)} ${tokenIn.symbol} or less to swap close to the market price.`
-                                : `Swap up to ~${fmtAmountDown(suggestedMaxIn)} ${tokenIn.symbol} to stay under ${MAX_IMPACT * 100}% price impact, or continue at this price.`}
+                                : `Swap up to ~${fmtAmountDown(suggestedMaxIn)} ${tokenIn.symbol} to stay within ${MAX_IMPACT * 100}% of the market price, or continue at this price.`}
                         </div>
                     )}
                 </div>
             )}
 
-            {evmQuoteOut && !insufficientLiquidity && !isHighPriceImpact && suggestedMaxIn !== null && tokenIn && (
+            {evmQuoteOut && !insufficientLiquidity && !isHighPriceImpact && isOffMarket && tokenIn && tokenOut && (
                 <div className="mt-4 p-3 rounded-xl border text-sm text-center bg-blue-500/10 border-blue-500/30 text-blue-300">
-                    Limited liquidity for this amount. Swap up to ~{fmtAmountDown(suggestedMaxIn)} {tokenIn.symbol} to stay under{" "}
-                    {MAX_IMPACT * 100}% price impact, or continue at this price.
+                    {liquidity?.depth?.maxIn === 0
+                        ? `${tokenOut.symbol}'s price on ${CHAIN_NAMES[activeTab]} exchanges is ~${(marketDeviation! * 100).toFixed(1)}% below the market price (CoinGecko), even for small amounts.`
+                        : `At this amount you receive ~${(marketDeviation! * 100).toFixed(1)}% less than the market price (CoinGecko), due to limited liquidity.`}
+                    {suggestedMaxIn !== null && (
+                        <div className="mt-1.5">
+                            Swap up to ~{fmtAmountDown(suggestedMaxIn)} {tokenIn.symbol} to stay within {MAX_IMPACT * 100}% of the market
+                            price, or continue at this price.
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -416,20 +430,13 @@ export function SwapCard() {
                 </div>
             )}
 
-            {tokenIn && tokenOut && (liquidityLoading || liquidity?.pool || liquidity?.depth) && (
+            {tokenIn && tokenOut && (liquidityLoading || liquidity?.pool) && (
                 <div className="mt-3 p-3 rounded-xl bg-surface-light border border-border text-xs text-text-muted space-y-1">
                     {liquidityLoading && <div>Checking liquidity…</div>}
                     {liquidity?.pool && (
                         <div>
                             <span className="text-white/80">{liquidity.pool.symbol} liquidity on {CHAIN_NAMES[activeTab]}:</span>{" "}
                             ~${fmtAmount(liquidity.pool.usd)} (~{fmtAmount(liquidity.pool.tokenAmount)} {liquidity.pool.symbol})
-                        </div>
-                    )}
-                    {liquidity?.depth && (
-                        <div>
-                            <span className="text-white/80">Under {MAX_IMPACT * 100}% price impact:</span>{" "}
-                            {liquidity.depth.aboveRange ? "more than " : "up to "}~{fmtAmountDown(liquidity.depth.maxIn)} {tokenIn.symbol}
-                            {" "}(~{fmtAmount(liquidity.depth.maxOut)} {tokenOut.symbol})
                         </div>
                     )}
                 </div>
