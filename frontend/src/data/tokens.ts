@@ -16,6 +16,11 @@ export interface Token {
   /// endpoint of the swap path — see useEvmQuote's tokenInTaxBps/
   /// tokenOutTaxBps params, which correct for it.
   transferTaxBps?: number;
+  /// CoinGecko id of the original coin, for bridged/pegged copies (e.g.
+  /// Binance-Peg Firo -> 'zcoin'). The copy's own listing is priced from
+  /// its few DEX pools and can sit far from the price the coin trades at
+  /// everywhere else, so swaps are compared against the original's price.
+  coingeckoId?: string;
 }
 
 export const NATIVE_TOKEN_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
@@ -212,6 +217,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'BTCB',
     name: 'Binance Pegged Bitcoin',
     decimals: 18,
+    coingeckoId: 'bitcoin',
     logoURI: 'https://tokens.pancakeswap.finance/images/0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c.png',
   },
   {
@@ -426,6 +432,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'SOL',
     name: 'Binance-Peg Solana',
     decimals: 18,
+    coingeckoId: 'solana',
     logoURI: 'https://coin-images.coingecko.com/coins/images/54582/large/wsol.png?1740542147',
   },
   {
@@ -433,6 +440,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'BCH',
     name: 'Binance-Peg Bitcoin Cash',
     decimals: 18,
+    coingeckoId: 'bitcoin-cash',
     logoURI: 'https://coin-images.coingecko.com/coins/images/15774/large/bitcoin-cash-circle.png?1696515398',
   },
   {
@@ -440,6 +448,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'NEAR',
     name: 'Binance-Peg NEAR Protocol',
     decimals: 18,
+    coingeckoId: 'near',
     logoURI: 'https://coin-images.coingecko.com/coins/images/51252/large/NEAR.JPG?1730470269',
   },
   {
@@ -447,6 +456,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'FIL',
     name: 'Binance-Peg Filecoin',
     decimals: 18,
+    coingeckoId: 'filecoin',
     logoURI: 'https://coin-images.coingecko.com/coins/images/15776/large/filecoin.png?1696515400',
   },
   {
@@ -454,6 +464,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'XTZ',
     name: 'Binance-Peg Tezos',
     decimals: 18,
+    coingeckoId: 'tezos',
     logoURI: 'https://coin-images.coingecko.com/coins/images/51251/large/TEZOS.png?1730470163',
   },
   {
@@ -461,6 +472,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'ZEC',
     name: 'Binance-Peg Zcash',
     decimals: 18,
+    coingeckoId: 'zcash',
     logoURI: 'https://coin-images.coingecko.com/coins/images/70075/large/zcash.png?1760512015',
   },
   // Found via CoinGecko's authoritative `binance-peg-tokens` category listing
@@ -472,6 +484,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'AVAX',
     name: 'Binance-Peg Avalanche',
     decimals: 18,
+    coingeckoId: 'avalanche-2',
     logoURI: 'https://coin-images.coingecko.com/coins/images/18674/large/avax_logo_1.png?1696518143',
   },
   {
@@ -479,6 +492,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'IOTX',
     name: 'Binance-Peg IoTeX',
     decimals: 18,
+    coingeckoId: 'iotex',
     logoURI: 'https://coin-images.coingecko.com/coins/images/15978/large/iotex-logo.png?1696515591',
   },
   {
@@ -486,6 +500,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'FIRO',
     name: 'Binance-Peg Firo',
     decimals: 8,
+    coingeckoId: 'zcoin',
     logoURI: 'https://coin-images.coingecko.com/coins/images/20128/large/firocoingecko.png?1696519544',
   },
   {
@@ -871,6 +886,7 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     symbol: 'ICP',
     name: 'Internet Computer',
     decimals: 8,
+    coingeckoId: 'internet-computer',
     logoURI: 'https://coin-images.coingecko.com/coins/images/14495/large/Internet_Computer_logo.png?1696514180',
   },
   {

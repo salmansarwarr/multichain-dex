@@ -71,9 +71,9 @@ function toUnits(amount: number, decimals: number): bigint {
 
 async function poolLiquidity(chainId: number, focus: Token, tokens: Token[], signal: AbortSignal) {
   const net = GT_NETWORK[chainId];
-  const majors = new Set(tokens.filter(isMajor).map((t) => t.address.toLowerCase()));
-  majors.add(WRAPPED_NATIVE[chainId]);
-  majors.add('0x0000000000000000000000000000000000000000'); // native ETH/BNB in Uniswap V4 / Infinity pools
+  const listed = new Set(tokens.map((t) => t.address.toLowerCase()));
+  listed.add(WRAPPED_NATIVE[chainId]);
+  listed.add('0x0000000000000000000000000000000000000000'); // native ETH/BNB in Uniswap V4 / Infinity pools
   const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/${net}/tokens/${focus.address.toLowerCase()}/pools`, { signal });
   if (!res.ok) return null;
   const { data } = await res.json();
@@ -83,9 +83,9 @@ async function poolLiquidity(chainId: number, focus: Token, tokens: Token[], sig
     const base = String(p.relationships?.base_token?.data?.id ?? '').split('_').pop()!.toLowerCase();
     const quote = String(p.relationships?.quote_token?.data?.id ?? '').split('_').pop()!.toLowerCase();
     const other = base === me ? quote : quote === me ? base : null;
-    // Only pools against majors: junk pairs often carry self-reported
-    // reserves worth nothing.
-    if (!other || !majors.has(other)) continue;
+    // Only pools against tokens in our list (e.g. MNT/USDe, T/WETH): junk
+    // pairs often carry self-reported reserves worth nothing.
+    if (!other || !listed.has(other)) continue;
     pools.push({
       reserve: Number(p.attributes?.reserve_in_usd ?? 0),
       price: Number(base === me ? p.attributes?.base_token_price_usd : p.attributes?.quote_token_price_usd),
@@ -105,15 +105,14 @@ async function poolLiquidity(chainId: number, focus: Token, tokens: Token[], sig
 
 const priceCache = new Map<string, { at: number; price: number }>();
 
-async function coingeckoPrice(chainId: number, addr: string, native: boolean, signal: AbortSignal): Promise<number> {
-  const id = CG_NATIVE_ID[chainId];
-  const url = native
+async function coingeckoPrice(chainId: number, addr: string, id: string | null, signal: AbortSignal): Promise<number> {
+  const url = id
     ? `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`
     : `https://api.coingecko.com/api/v3/simple/token_price/${CG_PLATFORM[chainId]}?contract_addresses=${addr}&vs_currencies=usd`;
   const res = await fetch(url, { signal });
   if (!res.ok) return 0;
   const body = await res.json();
-  return Number((native ? body?.[id]?.usd : body?.[addr]?.usd) ?? 0);
+  return Number((id ? body?.[id]?.usd : body?.[addr]?.usd) ?? 0);
 }
 
 async function geckoterminalPrice(chainId: number, addr: string, signal: AbortSignal): Promise<number> {
@@ -129,10 +128,11 @@ async function geckoterminalPrice(chainId: number, addr: string, signal: AbortSi
 async function usdPrice(chainId: number, token: Token, signal: AbortSignal): Promise<number> {
   const native = token.address === NATIVE_TOKEN_ADDRESS || token.address.toLowerCase() === WRAPPED_NATIVE[chainId];
   const addr = native ? WRAPPED_NATIVE[chainId] : token.address.toLowerCase();
+  const id = native ? CG_NATIVE_ID[chainId] : token.coingeckoId ?? null;
   const key = `${chainId}:${addr}`;
   const hit = priceCache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.price;
-  let price = await coingeckoPrice(chainId, addr, native, signal).catch(() => 0);
+  let price = await coingeckoPrice(chainId, addr, id, signal).catch(() => 0);
   if (!(price > 0)) price = await geckoterminalPrice(chainId, addr, signal).catch(() => 0);
   if (price > 0) priceCache.set(key, { at: Date.now(), price });
   return price;
@@ -151,11 +151,9 @@ async function depth(chain: string, tokenIn: Token, tokenOut: Token, priceUsd: n
   const results = await Promise.all([REF_USD, ...PROBE_USD].map((usd) => quote(usd / priceUsd)));
   const ref = results[0];
   if (!ref || !(ref.out > 0)) return null;
-  // Deviation is measured against the market rate. Without one, or when it
-  // is wildly off what the DEXes quote (bad price data), fall back to the
+  // Deviation is measured against the market rate, or without one, the
   // spot rate of a tiny trade.
-  const spotRate = ref.out / ref.inAmt;
-  const refRate = marketRate > 0 && Math.abs(spotRate / marketRate - 1) <= 0.1 ? marketRate : spotRate;
+  const refRate = marketRate > 0 ? marketRate : ref.out / ref.inAmt;
   const impactOf = (q: { inAmt: number; out: number }) => ({ amt: q.inAmt, impact: 1 - q.out / q.inAmt / refRate });
   const spot = impactOf(ref);
   if (spot.impact > DEPTH_TARGET) return { maxIn: 0, maxOut: 0, aboveRange: false, spotDeviation: spot.impact };
