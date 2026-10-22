@@ -35,6 +35,11 @@ function fmtAmountDown(n: number): string {
     return (Math.floor(n * 10 ** d + 1e-9) / 10 ** d).toFixed(d).replace(/\.?0+$/, "");
 }
 
+// Two decimals near the 1% threshold, so 1.04% doesn't read as "1.0%".
+function fmtPct(f: number): string {
+    return (f * 100).toFixed(f < 0.02 ? 2 : 1);
+}
+
 function fmtAmount(n: number): string {
     if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
     if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -404,10 +409,10 @@ export function SwapCard() {
                     {isExtremePriceImpact
                         ? `Price impact ~${(priceImpactBps! / 100).toFixed(1)}% — this pool has too little liquidity for this trade. Swap disabled to protect you.`
                         : offAtAnySize
-                          ? `You receive ~${(deviation! * 100).toFixed(1)}% less than the market price (CoinGecko). ${offSymbol} is priced off the market on every ${CHAIN_NAMES[activeTab]} exchange, so even small swaps get ~${(Math.max(liquidity!.depth!.spotDeviation, MAX_IMPACT) * 100).toFixed(1)}% less.`
+                          ? `You receive ~${fmtPct(deviation!)}% less than the market price (CoinGecko). ${offSymbol} is priced off the market on every ${CHAIN_NAMES[activeTab]} exchange, so even small swaps get ~${(Math.max(liquidity!.depth!.spotDeviation, MAX_IMPACT) * 100).toFixed(1)}% less.`
                           : byMarket
-                            ? `You receive ~${(deviation! * 100).toFixed(1)}% less than the market price (CoinGecko) — low liquidity for this amount.`
-                            : `High price impact ~${(deviation! * 100).toFixed(1)}% — low liquidity for this pair, you may receive significantly less value than expected.`}
+                            ? `You receive ~${fmtPct(deviation!)}% less than the market price (CoinGecko) — low liquidity for this amount.`
+                            : `High price impact ~${fmtPct(deviation!)}% — low liquidity for this pair, you may receive significantly less value than expected.`}
                     {suggestedMaxIn !== null && tokenIn && (
                         <div className="mt-1.5 font-normal">
                             {isExtremePriceImpact
@@ -421,10 +426,10 @@ export function SwapCard() {
             {evmQuoteOut && !insufficientLiquidity && !isHighPriceImpact && !isExtremePriceImpact && isOffMarket && tokenIn && tokenOut && (
                 <div className="mt-4 p-3 rounded-xl border text-sm text-center bg-blue-500/10 border-blue-500/30 text-blue-300">
                     {offAtAnySize
-                        ? `You receive ~${(deviation! * 100).toFixed(1)}% less than the market price (CoinGecko). ${offSymbol} is priced off the market on every ${CHAIN_NAMES[activeTab]} exchange, so even small swaps get ~${(Math.max(liquidity!.depth!.spotDeviation, MAX_IMPACT) * 100).toFixed(1)}% less.`
+                        ? `You receive ~${fmtPct(deviation!)}% less than the market price (CoinGecko). ${offSymbol} is priced off the market on every ${CHAIN_NAMES[activeTab]} exchange, so even small swaps get ~${(Math.max(liquidity!.depth!.spotDeviation, MAX_IMPACT) * 100).toFixed(1)}% less.`
                         : byMarket
-                          ? `At this amount you receive ~${(deviation! * 100).toFixed(1)}% less than the market price (CoinGecko), due to limited liquidity.`
-                          : `Price impact ~${(deviation! * 100).toFixed(1)}% — limited liquidity for this amount.`}
+                          ? `At this amount you receive ~${fmtPct(deviation!)}% less than the market price (CoinGecko), due to limited liquidity.`
+                          : `Price impact ~${fmtPct(deviation!)}% — limited liquidity for this amount.`}
                     {suggestedMaxIn !== null && (
                         <div className="mt-1.5">
                             Swap up to ~{fmtAmountDown(suggestedMaxIn)} {tokenIn.symbol} to stay within {MAX_IMPACT * 100}% of the market
