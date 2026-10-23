@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 interface SwapDetailsProps {
+  feePercent: string;
   feeAmount: string | null;
   feeSymbol: string | null;
   minReceived: string | null;
@@ -10,6 +11,7 @@ interface SwapDetailsProps {
 }
 
 export function SwapDetails({
+  feePercent,
   feeAmount,
   feeSymbol,
   minReceived,
@@ -27,7 +29,7 @@ export function SwapDetails({
       >
         <span className="font-medium text-text-muted">Swap Details</span>
         <div className="flex items-center gap-2">
-          {feeAmount && <span className="text-white">Fee: 0.15%</span>}
+          {feeAmount && <span className="text-white">Fee: {feePercent}%</span>}
           <svg
             className={`w-4 h-4 text-text-muted transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
             fill="none"
@@ -55,7 +57,7 @@ export function SwapDetails({
           </div>
 
           <div className="flex justify-between items-center">
-            <span className="text-text-muted">Platform Fee (0.15%)</span>
+            <span className="text-text-muted">Platform Fee ({feePercent}%)</span>
             <span className="font-medium">
               {feeAmount ? `${feeAmount} ${feeSymbol}` : '-'}
             </span>

@@ -49,7 +49,11 @@ export function useEvmQuote(
   // FeeRouter.sol's _pullAndSkimFee); tokenOut's tax hits once, on the
   // pool -> recipient transfer.
   tokenInTaxBps: number | undefined,
-  tokenOutTaxBps: number | undefined
+  tokenOutTaxBps: number | undefined,
+  // Platform fee in basis points, read from the FeeRouter contract (owner-
+  // adjustable). No quote until it is known, so the quote never assumes a
+  // different fee than the contract will actually take.
+  feeBps: number | null
 ) {
   const [quote, setQuote] = useState<bigint | null>(null);
   const [loading, setLoading] = useState(false);
@@ -105,7 +109,7 @@ export function useEvmQuote(
     let active = true;
 
     async function fetchQuote() {
-      if (!chainId || !tokenIn || !tokenOut || !amountIn || amountIn === 0n || !publicClient) {
+      if (!chainId || !tokenIn || !tokenOut || !amountIn || amountIn === 0n || !publicClient || feeBps === null) {
         setQuote(null);
         setLoading(false);
         setError(null);
@@ -193,14 +197,14 @@ export function useEvmQuote(
           return;
         }
 
-        // Deduct 0.15% platform fee, plus (for a fee-on-transfer tokenIn
+        // Deduct the platform fee, plus (for a fee-on-transfer tokenIn
         // like Alfat) the two real transfer-tax hits it takes on its way
         // into the pool — user -> FeeRouter, then FeeRouter -> pool —
         // mirroring FeeRouter.sol's own _pullAndSkimFee order: tax, then
         // fee off the post-tax balance, then tax again.
         const tokenInTax = BigInt(tokenInTaxBps ?? 0);
         const receivedByRouter = amountIn - (amountIn * tokenInTax) / 10000n;
-        const fee = (receivedByRouter * 15n) / 10000n;
+        const fee = (receivedByRouter * BigInt(feeBps)) / 10000n;
         const afterFee = receivedByRouter - fee;
         const amountInAfterFee = afterFee - (afterFee * tokenInTax) / 10000n;
 
@@ -705,7 +709,7 @@ export function useEvmQuote(
       active = false;
       clearTimeout(timer);
     };
-  }, [chainId, tokenIn, tokenOut, amountIn, intermediateTokensKey, publicClient, tokenInTaxBps, tokenOutTaxBps]);
+  }, [chainId, tokenIn, tokenOut, amountIn, intermediateTokensKey, publicClient, tokenInTaxBps, tokenOutTaxBps, feeBps]);
 
   return { quote, loading, error, priceImpactBps, insufficientLiquidity, path, quoteVersion, v3Fee, v3Path, aggregatorRoute };
 }

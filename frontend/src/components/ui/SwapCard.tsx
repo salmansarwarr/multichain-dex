@@ -29,6 +29,10 @@ import { describeRoute } from "@/lib/routeLabel";
 /// Rounded *down* to 3 significant digits, so a suggested maximum shown to
 /// the user never exceeds the real one (typing it in must not re-trigger the
 /// notice).
+const FEE_BPS_ABI = [
+    { type: "function", name: "feeBps", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+] as const;
+
 function fmtAmountDown(n: number): string {
     if (n >= 1000) return Math.floor(n).toLocaleString();
     const d = n >= 1 ? 2 : Math.max(0, 2 - Math.floor(Math.log10(n)));
@@ -160,6 +164,18 @@ export function SwapCard() {
                 .filter((address): address is string => !!address),
         [tokens],
     );
+    // Platform fee, read from the FeeRouter so the UI always matches what
+    // the contract charges (the owner can change it with setFeeBps).
+    const { data: feeBpsRaw } = useReadContract({
+        address: getFeeRouterAddress(expectedChainId),
+        abi: FEE_BPS_ABI,
+        functionName: "feeBps",
+        chainId: expectedChainId,
+        query: { enabled: !!getFeeRouterAddress(expectedChainId), staleTime: 60_000 },
+    });
+    const feeBps = feeBpsRaw !== undefined ? Number(feeBpsRaw) : null;
+    const feePercent = feeBps !== null ? String(feeBps / 100) : "…";
+
     const {
         quote: evmQuoteOut,
         loading: evmQuoteLoading,
@@ -179,6 +195,7 @@ export function SwapCard() {
         intermediateTokens,
         tokenIn?.transferTaxBps,
         tokenOut?.transferTaxBps,
+        feeBps,
     );
 
     // Price impact vs. the pool's own spot price — catches thin direct
@@ -191,11 +208,11 @@ export function SwapCard() {
     // Pair liquidity, the CoinGecko market rate and the largest amount that
     // stays close to it, checked once when the pair is selected.
     const { info: liquidity, loading: liquidityLoading } = useLiquidityInfo(expectedChainId, tokenIn, tokenOut, tokens);
-    // How far this quote is below the market rate, before the 0.15% fee
+    // How far this quote is below the market rate, before the platform fee
     // (shown separately). Not for tax tokens, whose quote includes the tax.
     const marketDeviation =
         evmQuoteOut && tokenIn && tokenOut && liquidity?.market && amountInNumber > 0 && !tokenIn.isFeeOnTransfer && !tokenOut.isFeeOnTransfer
-            ? 1 - Number(formatUnits(evmQuoteOut, tokenOut.decimals)) / (amountInNumber * 0.9985 * liquidity.market.rate)
+            ? 1 - Number(formatUnits(evmQuoteOut, tokenOut.decimals)) / (amountInNumber * (1 - (feeBps ?? 0) / 10000) * liquidity.market.rate)
             : null;
     // Warnings compare against the market price when there is one; pairs of
     // major tokens and tax tokens fall back to the pool's price impact.
@@ -248,7 +265,7 @@ export function SwapCard() {
     } = useSwap();
 
     // Derived calculations for Swap Details
-    const feeRaw = amountInRaw ? (amountInRaw * 15n) / 10000n : null;
+    const feeRaw = amountInRaw && feeBps !== null ? (amountInRaw * BigInt(feeBps)) / 10000n : null;
     const feeDisplay =
         feeRaw && tokenIn ? formatUnits(feeRaw, tokenIn.decimals) : null;
 
@@ -322,7 +339,7 @@ export function SwapCard() {
 
             <div className="flex items-center gap-2 -mt-3 mb-5 flex-wrap">
                 <span className="text-xs font-medium text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full">
-                    0.15% fee
+                    {feePercent}% fee
                 </span>
                 <span className="text-xs font-medium text-green-400 bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-full">
                     Smart-contract secured
@@ -463,6 +480,7 @@ export function SwapCard() {
 
             {amountInRaw && evmQuoteOut && (
                 <SwapDetails
+                    feePercent={feePercent}
                     feeAmount={feeDisplay}
                     feeSymbol={tokenIn?.symbol || null}
                     minReceived={minReceivedDisplay}
