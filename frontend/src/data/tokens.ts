@@ -253,6 +253,7 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     symbol: 'DOGE',
     name: 'Dogecoin',
     decimals: 8,
+    coingeckoId: 'dogecoin',
     logoURI: 'https://tokens.pancakeswap.finance/images/0xbA2aE424d960c26247Dd6c32edC70B295c744C43.png',
   },
   {
@@ -511,6 +512,66 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     name: 'Kite',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/70426/large/KITE-ICON.png?1762328605',
+  },
+  {
+    // Added 2026-10-29 (client request), with the memecoins below. Each was
+    // checked at $750 and $5,000 against its CoinGecko price.
+    address: '0xce7de646e7208a4ef112cb6ed5038fa6cc6b12e3',
+    symbol: 'TRX',
+    name: 'TRON',
+    decimals: 6,
+    coingeckoId: 'tron',
+    logoURI: 'https://coin-images.coingecko.com/coins/images/1094/large/photo_2026-04-13_09-59-16.png?1776048311',
+  },
+  {
+    // Charges 0.3% on DEX buys/sells (GoPlus, 2026-10-29), so it takes the
+    // fee-on-transfer route, through its deep V2 pool.
+    address: '0xfb5b838b6cfeedc2873ab27866079ac55363d37e',
+    symbol: 'FLOKI',
+    name: 'FLOKI',
+    decimals: 9,
+    isFeeOnTransfer: true,
+    transferTaxBps: 30,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/16746/large/PNG_image.png?1696516318',
+  },
+  {
+    address: '0xc748673057861a797275cd8a068abb95a902e8de',
+    symbol: 'BABYDOGE',
+    name: 'Baby Doge Coin',
+    decimals: 9,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/16125/large/babydoge.jpg?1696515731',
+  },
+  {
+    address: '0x0df0587216a4a1bb7d5082fdc491d93d2dd4b413',
+    symbol: 'CHEEMS',
+    name: 'Cheems',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/30376/large/Hg4_Lhbg_400x400.jpg?1696529270',
+  },
+  {
+    address: '0x6a2608dabe09bc1128eec7275b92dfb939d5db3f',
+    symbol: 'TOSHI',
+    name: 'Toshi',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/31126/large/Toshi_Logo_-_Circular.png?1721677476',
+  },
+  {
+    // Bridged from Solana; thin here (~$130k), kept at the client's request.
+    address: '0xa697e272a73744b343528c3bc4702f2565b2f422',
+    symbol: 'BONK',
+    name: 'Bonk',
+    decimals: 5,
+    coingeckoId: 'bonk',
+    logoURI: 'https://coin-images.coingecko.com/coins/images/28600/large/bonk.jpg?1696527587',
+  },
+  {
+    // Bridged from Hyperliquid; thin here (~$100k), kept at the client's request.
+    address: '0xaed86a53a8f3dbba4fb6ae7a5f65f337c606bf28',
+    symbol: 'HYPE',
+    name: 'Hyperliquid',
+    decimals: 18,
+    coingeckoId: 'hyperliquid',
+    logoURI: 'https://coin-images.coingecko.com/coins/images/50882/large/hyperliquid.jpg?1729431300',
   },
 ];
 
@@ -1168,6 +1229,41 @@ export const ETH_MAINNET_TOKENS: Token[] = [
     name: 'Bitget Token',
     decimals: 18,
     logoURI: 'https://coin-images.coingecko.com/coins/images/11610/large/Bitget_logo.png?1736925727',
+  },
+  {
+    // Added 2026-10-29 (client request), with the memecoins below. Each was
+    // checked at $750 and $5,000 against its CoinGecko price.
+    address: '0x77e06c9eccf2e797fd462a92b6d7642ef85b0a44',
+    symbol: 'TAO',
+    name: 'Wrapped TAO',
+    decimals: 9,
+    coingeckoId: 'bittensor',
+    logoURI: 'https://coin-images.coingecko.com/coins/images/28452/large/ARUsPeNQ_400x400.jpeg?1696527447',
+  },
+  {
+    // Charges 0.3% on DEX buys/sells (GoPlus, 2026-10-29), so it takes the
+    // fee-on-transfer route, through its deep V2 pool.
+    address: '0xcf0c122c6b73ff809c693db761e7baebe62b6a2e',
+    symbol: 'FLOKI',
+    name: 'FLOKI',
+    decimals: 9,
+    isFeeOnTransfer: true,
+    transferTaxBps: 30,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/16746/large/PNG_image.png?1696516318',
+  },
+  {
+    address: '0xaaee1a9723aadb7afa2810263653a34ba2c21c7a',
+    symbol: 'MOG',
+    name: 'Mog Coin',
+    decimals: 18,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/31059/large/MOG_LOGO_200x200.png?1696529893',
+  },
+  {
+    address: '0x812ba41e071c7b7fa4ebcfb62df5f45f6fa853ee',
+    symbol: 'NEIRO',
+    name: 'Neiro',
+    decimals: 9,
+    logoURI: 'https://coin-images.coingecko.com/coins/images/39488/large/neiro.jpg?1731449567',
   },
 ];
 

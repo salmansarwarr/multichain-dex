@@ -31,6 +31,14 @@ function venueName(slug: string): string {
   return slug.split(/[-_]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
+// Wrapped native tokens aren't in every chain's token list but often sit
+// in the middle of a route.
+const WRAPPED_NATIVE: Record<string, string> = {
+  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c': 'WBNB',
+  '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': 'WETH',
+  '0x82af49447d8a07e3bd95bd0d56f35241523fbab1': 'WETH',
+};
+
 type Hop = { tokenIn?: string; tokenOut?: string; exchange?: string; swapAmount?: string };
 
 /// Human-readable route for the winning quote, e.g.
@@ -47,7 +55,9 @@ export function describeRoute(opts: {
 }): RouteLabel | null {
   const { isBsc, tokens, tokenIn, tokenOut, quoteVersion, path, v3Fee, aggregatorRoute } = opts;
   const symbolOf = (addr: string) =>
-    tokens.find((t) => t.address.toLowerCase() === addr.toLowerCase())?.symbol ?? `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+    tokens.find((t) => t.address.toLowerCase() === addr.toLowerCase())?.symbol ??
+    WRAPPED_NATIVE[addr.toLowerCase()] ??
+    `${addr.slice(0, 6)}…${addr.slice(-4)}`;
   const dex = isBsc ? 'PancakeSwap' : 'Uniswap';
 
   if (quoteVersion === 'aggregator') {

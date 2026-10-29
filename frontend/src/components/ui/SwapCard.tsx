@@ -202,8 +202,9 @@ export function SwapCard() {
     // pools that quote successfully but at a badly distorted rate (seen
     // live on BSC mainnet: USDe, WLFI, MemeCore all have a direct WBNB
     // pool with well under 1 BNB of real reserves). Past 15% the swap is
-    // refused, the common Uniswap/PancakeSwap-frontend convention.
-    const isExtremePriceImpact = priceImpactBps !== null && priceImpactBps >= 1500;
+    // refused, the common Uniswap/PancakeSwap-frontend convention — but see
+    // isExtremeImpact below, which also checks the market price.
+    const poolImpactExtreme = priceImpactBps !== null && priceImpactBps >= 1500;
 
     // Pair liquidity, the CoinGecko market rate and the largest amount that
     // stays close to it, checked once when the pair is selected.
@@ -221,6 +222,11 @@ export function SwapCard() {
     const deviation = byMarket ? marketDeviation : priceImpactBps !== null ? priceImpactBps / 10000 : null;
     const isOffMarket = deviation !== null && deviation > MAX_IMPACT;
     const isHighPriceImpact = deviation !== null && deviation >= 0.03;
+    // Refuse the swap only when the market price agrees it is that bad: the
+    // pool measure compares against a tiny reference trade, which can hit
+    // an odd pool and overstate the impact (2026-10-28: 100 ARB -> GMX
+    // blocked at "15.3%" while ~3.6% below market).
+    const isExtremePriceImpact = poolImpactExtreme && (!byMarket || deviation === null || deviation >= 0.15);
     // Even a tiny swap is off the market price: every exchange on this
     // chain prices the token away from where it trades elsewhere.
     const offAtAnySize = byMarket && liquidity?.depth?.maxIn === 0;
@@ -319,7 +325,9 @@ export function SwapCard() {
 
     // Featured tax-token stat (e.g. Alfat) — read live rather than
     // hardcoded, so it can't drift from the real on-chain value.
-    const featuredToken = tokenIn?.isFeeOnTransfer ? tokenIn : tokenOut?.isFeeOnTransfer ? tokenOut : undefined;
+    // Only the project's own token; other tax tokens (e.g. FLOKI) get no badge.
+    const isFeatured = (t: Token | null) => !!t?.isFeeOnTransfer && t.symbol === "Alfat";
+    const featuredToken = isFeatured(tokenIn) ? tokenIn! : isFeatured(tokenOut) ? tokenOut! : undefined;
     const { data: featuredTokenSupply } = useReadContract({
         address: featuredToken?.address as `0x${string}` | undefined,
         abi: ERC20ABI,
@@ -424,7 +432,7 @@ export function SwapCard() {
                     }`}
                 >
                     {isExtremePriceImpact
-                        ? `Price impact ~${(priceImpactBps! / 100).toFixed(1)}% — this pool has too little liquidity for this trade. Swap disabled to protect you.`
+                        ? `${byMarket && deviation !== null ? `You receive ~${fmtPct(deviation)}% less than the market price (CoinGecko)` : `Price impact ~${(priceImpactBps! / 100).toFixed(1)}%`} — this pool has too little liquidity for this trade. Swap disabled to protect you.`
                         : offAtAnySize
                           ? `You receive ~${fmtPct(deviation!)}% less than the market price (CoinGecko). ${offSymbol} is priced off the market on every ${CHAIN_NAMES[activeTab]} exchange, so even small swaps get ~${(Math.max(liquidity!.depth!.spotDeviation, MAX_IMPACT) * 100).toFixed(1)}% less.`
                           : byMarket
