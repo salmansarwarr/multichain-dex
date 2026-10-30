@@ -17,16 +17,17 @@ export type LiquidityInfo = {
   depth: { maxIn: number; maxOut: number; aboveRange: boolean; spotDeviation: number } | null;
 };
 
-/// A swap is flagged when it receives more than this below the market rate.
-export const MAX_IMPACT = 0.01;
+/// A swap is flagged when it receives more than this below the market rate
+/// (raised from 1% to 5% at the client's request, 2026-10-30).
+export const MAX_IMPACT = 0.05;
 // The suggested amount aims a little lower, so entering it clears the flag
 // even after rounding and small market moves.
-const DEPTH_TARGET = 0.009;
+const DEPTH_TARGET = 0.045;
 // KyberSwap allows ~30 requests per 10s per user, shared with the quotes:
 // this check uses 1 + 4 + REFINE_STEPS of them per pair, starts after
 // START_DELAY_MS so the quote goes first, and is skipped for pairs of major
 // tokens (deep liquidity; also the default pair on every page load).
-const PROBE_USD = [50, 250, 1_000, 5_000];
+const PROBE_USD = [250, 1_000, 5_000, 20_000];
 const START_DELAY_MS = 1_500;
 const REFINE_STEPS = 2;
 const REF_USD = 2;
@@ -182,7 +183,7 @@ async function depth(chain: string, tokenIn: Token, tokenOut: Token, priceUsd: n
   return { maxIn, maxOut: maxIn * refRate * (1 - DEPTH_TARGET), aboveRange: false, spotDeviation: spot.impact };
 }
 
-/// Pool liquidity and depth (amount tradeable under 1% price impact) for a
+/// Pool liquidity and depth (amount tradeable within MAX_IMPACT of market) for a
 /// token pair. Fetched once per pair, not per keystroke, and cached.
 export function useLiquidityInfo(chainId: number, tokenIn: Token | null, tokenOut: Token | null, tokens: Token[]) {
   const chain = getAggregatorChain(chainId);
