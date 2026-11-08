@@ -497,12 +497,25 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     logoURI: 'https://coin-images.coingecko.com/coins/images/15978/large/iotex-logo.png?1696515591',
   },
   {
-    address: '0xd5d0322b6bAb6a762C79f8c81A0B674778E13aeD',
+    // Switched 2026-11-08 from Binance-Peg Firo (traded ~35% above the real
+    // Firo price on BSC) to rsFIRO (Rosen-bridged Firo), which trades at the
+    // real market price. Symbol kept as FIRO for users; labeled rsFIRO.
+    address: '0x13cdb5f7f398f6af2cc3b34eb04476af3488853f',
     symbol: 'FIRO',
-    name: 'Binance-Peg Firo',
+    name: 'Firo (rsFIRO)',
     decimals: 8,
-    coingeckoId: 'zcoin',
-    logoURI: 'https://coin-images.coingecko.com/coins/images/20128/large/firocoingecko.png?1696519544',
+    coingeckoId: 'rsfiro',
+    logoURI: 'https://coin-images.coingecko.com/coins/images/102178326/large/rsFiro-icon.png?1789316517',
+  },
+  {
+    // Binance-Peg SHIBA INU; trades at the real SHIB market price (+0.1% at
+    // 0.1 BNB), ~$500k liquidity across PancakeSwap/ApeSwap/Biswap.
+    address: '0x2859e4544c4bb03966803b044a93563bd2d0dd4d',
+    symbol: 'SHIB',
+    name: 'Shiba Inu',
+    decimals: 18,
+    coingeckoId: 'shiba-inu',
+    logoURI: 'https://coin-images.coingecko.com/coins/images/11939/large/shiba.png?1696511800',
   },
   {
     // Restored 2026-10-07: its liquidity is on PancakeSwap Infinity, now
@@ -533,13 +546,6 @@ export const BSC_MAINNET_TOKENS: Token[] = [
     isFeeOnTransfer: true,
     transferTaxBps: 30,
     logoURI: 'https://coin-images.coingecko.com/coins/images/16746/large/PNG_image.png?1696516318',
-  },
-  {
-    address: '0xc748673057861a797275cd8a068abb95a902e8de',
-    symbol: 'BABYDOGE',
-    name: 'Baby Doge Coin',
-    decimals: 9,
-    logoURI: 'https://coin-images.coingecko.com/coins/images/16125/large/babydoge.jpg?1696515731',
   },
   {
     address: '0x0df0587216a4a1bb7d5082fdc491d93d2dd4b413',
@@ -1113,14 +1119,14 @@ export const ETH_MAINNET_TOKENS: Token[] = [
   },
   {
     address: '0x64aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d5',
-    symbol: 'OHM',
-    name: 'Olympus',
+    symbol: 'OHM V2',
+    name: 'Olympus V2',
     decimals: 9,
     logoURI: 'https://coin-images.coingecko.com/coins/images/14483/large/token_OHM_%281%29.png?1696514169',
   },
   {
     address: '0xe0f63a424a4439cbe457d80e4f4b51ad25b2c56c',
-    symbol: 'SPX',
+    symbol: 'SPX6900',
     name: 'SPX6900',
     decimals: 8,
     logoURI: 'https://coin-images.coingecko.com/coins/images/31401/large/centeredcoin_%281%29.png?1737048493',
